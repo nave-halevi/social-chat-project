@@ -1,6 +1,6 @@
 import { useNavigate } from "react-router-dom";
 
-import { useAuth } from "../../../context/AuthContext";
+import { useAuth } from "../../../context/auth-context";
 import ChangePasswordForm from "../components/ChangePasswordForm";
 import ProfileDetailsForm from "../components/ProfileDetailsForm";
 import ProfileSummaryCard from "../components/ProfileSummaryCard";

@@ -1,6 +1,6 @@
-const API_ORIGIN = import.meta.env.VITE_API_URL || "http://localhost:3000";
+import { API_BASE_URL, getWebSocketOrigin } from "../../../config/api";
 
-const BASE_URL = `${API_ORIGIN}/api/lab`;
+const BASE_URL = `${API_BASE_URL}/lab`;
 
 const getAuthHeaders = () => {
   const token = localStorage.getItem("token");
@@ -128,7 +128,7 @@ export function getTerminalUrl(environmentId) {
     throw new Error("Environment ID is required for a terminal connection.");
   }
 
-  const websocketOrigin = API_ORIGIN.replace(/^http/, "ws");
+  const websocketOrigin = getWebSocketOrigin();
   const token = encodeURIComponent(localStorage.getItem("token") || "");
 
   return `${websocketOrigin}/api/lab/terminal/${environmentId}?token=${token}`;

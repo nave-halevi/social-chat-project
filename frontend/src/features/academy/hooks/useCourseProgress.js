@@ -32,8 +32,43 @@ export default function useCourseProgress(courseId) {
   }, [courseId]);
 
   useEffect(() => {
-    loadProgress();
-  }, [loadProgress]);
+    let cancelled = false;
+
+    if (!courseId) {
+      return undefined;
+    }
+
+    Promise.resolve()
+      .then(() => {
+        if (cancelled) {
+          return null;
+        }
+
+        setProgressLoading(true);
+        setProgressError(null);
+
+        return getCourseProgress(courseId);
+      })
+      .then((data) => {
+        if (!cancelled && data) {
+          setProgress(data);
+        }
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          setProgressError(error.message || "Failed to load course progress");
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setProgressLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [courseId]);
 
   return {
     progress,

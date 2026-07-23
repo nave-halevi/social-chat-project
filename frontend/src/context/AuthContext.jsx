@@ -1,30 +1,26 @@
-import {
-  createContext,
-  useCallback,
-  useContext,
-  useEffect,
-  useState,
-} from "react";
+import { useCallback, useState } from "react";
 import {
   login as loginRequest,
   register as registerRequest,
 } from "../features/auth/services/authService";
+import { AuthContext } from "./auth-context";
 
-const AuthContext = createContext();
+function readStoredSession() {
+  const token = localStorage.getItem("token");
+
+  try {
+    const user = JSON.parse(localStorage.getItem("user"));
+
+    return user && token ? { user, token } : { user: null, token: null };
+  } catch {
+    return { user: null, token: null };
+  }
+}
 
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(null);
-  const [token, setToken] = useState(null);
-
-  useEffect(() => {
-    const savedUser = localStorage.getItem("user");
-    const savedToken = localStorage.getItem("token");
-
-    if (savedUser && savedToken) {
-      setUser(JSON.parse(savedUser));
-      setToken(savedToken);
-    }
-  }, []);
+  const [initialSession] = useState(readStoredSession);
+  const [user, setUser] = useState(initialSession.user);
+  const [token, setToken] = useState(initialSession.token);
 
   const login = async (email, password) => {
     const data = await loginRequest(email, password);
@@ -75,8 +71,4 @@ export function AuthProvider({ children }) {
       {children}
     </AuthContext.Provider>
   );
-}
-
-export function useAuth() {
-  return useContext(AuthContext);
 }

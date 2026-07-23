@@ -1,7 +1,7 @@
 import { NavLink } from "react-router-dom";
 /* eslint-disable react-hooks/set-state-in-effect */
 import { useEffect, useState } from "react";
-import { useAuth } from "../context/AuthContext";
+import { useAuth } from "../context/auth-context";
 import { deleteLab, getAnyActiveLab } from "../features/labs/services/labService";
 
 export default function AppNavbar() {

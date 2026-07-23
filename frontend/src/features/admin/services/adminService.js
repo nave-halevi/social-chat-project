@@ -1,6 +1,7 @@
-const API_ORIGIN = import.meta.env.VITE_API_URL || "http://localhost:3000";
-const ADMIN_URL = `${API_ORIGIN}/api/admin`;
-const ACADEMY_URL = `${API_ORIGIN}/api/academy/admin`;
+import { API_BASE_URL } from "../../../config/api";
+
+const ADMIN_URL = `${API_BASE_URL}/admin`;
+const ACADEMY_URL = `${API_BASE_URL}/academy/admin`;
 
 const headers = () => ({
   "Content-Type": "application/json",
