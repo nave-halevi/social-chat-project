@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
 
-import { useAuth } from "../../../context/AuthContext";
+import { useAuth } from "../../../context/auth-context";
 import AdminHeader from "../components/AdminHeader";
 import AdminTable from "../components/AdminTable";
 import ConfirmActionModal from "../components/ConfirmActionModal";

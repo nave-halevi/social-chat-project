@@ -29,10 +29,29 @@ export default function useDashboard() {
   }, []);
 
   useEffect(() => {
-    loadDashboard().catch(() => {
-      // The error is already stored in state.
-    });
-  }, [loadDashboard]);
+    let cancelled = false;
+
+    getDashboard()
+      .then((data) => {
+        if (!cancelled) {
+          setDashboard(data);
+        }
+      })
+      .catch((requestError) => {
+        if (!cancelled) {
+          setError(requestError.message || "Failed to load dashboard.");
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   return {
     dashboard,

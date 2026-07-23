@@ -1,135 +1,91 @@
 # Database
 
-PostgreSQL stores authentication data, Academy content, Lab lifecycle state, flags, scores and task progress. UUIDs are used as primary keys.
+PostgreSQL stores users, Academy content, progress, Lab lifecycle, flags and Admin activity. UUIDs are primary keys.
 
 ## Relationships
 
 ```text
 users
-  ├── environments ── scenarios ── flags
-  │        └── instances              └── user_flags ── users
-  └── user_task_progress ── tasks
+  ├── user_task_progress ── tasks ── sections ── courses
+  ├── user_flags ── flags ── scenarios
+  ├── environments ── scenarios
+  │        └── instances
+  └── admin_activity_logs
 
-courses ── sections ── tasks ── optional scenario
+tasks ── optional scenario
 ```
 
 ## Tables
 
 ### `users`
 
-- `id`: UUID primary key.
-- `user_name`: display/login-related name.
-- `email`: unique email.
-- `password_hash`: bcrypt hash.
-- `role`: `user` by default; the application also supports `admin`.
-- `total_score`: cumulative CTF score.
-- `created_at`, `updated_at`: timestamps.
+`id`, `user_name`, unique `email`, `password_hash`, timestamps, `role`, legacy `total_score`, optional `avatar_url` and `is_active`.
 
-### `courses`
+Displayed score is not read from `users.total_score`; current queries sum `user_task_progress.earned_points`. The column remains for compatibility with the earlier schema.
 
-- UUID, title, unique slug, optional description and difficulty.
-- `is_published` controls visibility in the public catalog.
-- Deleting a course cascades to sections and tasks.
+### `courses`, `sections`, `tasks`
 
-### `sections`
+Courses have title, unique slug, description, difficulty, publication state and creation time. Sections belong to courses and have a unique `order_index` within each course. Tasks belong to sections, optionally reference a scenario, and store content, type, order and points. Task order is unique within a section.
 
-- Belongs to a course.
-- `order_index` is unique within a course.
-- Contains title and optional description.
-
-### `tasks`
-
-- Belongs to a section.
-- May reference a scenario.
-- Contains title, content, task type, order and points.
-- `order_index` is unique within a section.
-- Current frontend types are `LESSON`, `PRACTICE` and `LAB`.
+Current task types are `LESSON`, `PRACTICE` and `LAB`.
 
 ### `user_task_progress`
 
-- Unique per user and task.
-- Stores status, start time and completion time.
-- Correct Lab flag submission upserts `COMPLETED`.
+One row per user/task, enforced by a unique constraint. It stores status, start/completion timestamps and `earned_points`. Statuses written by the application are `IN_PROGRESS` and `COMPLETED`; absence of a row is exposed as `NOT_STARTED`.
+
+When first completed, a task copies `tasks.points` into `earned_points`. Later completion calls preserve the existing points, preventing duplicate scoring.
 
 ### `scenarios`
 
-Represents a Lab definition and VM template. The current repositories expect:
-
-- title, difficulty and description;
-- `vm_template_name`;
-- `estimated_time_minutes`;
-- `max_score`;
-- `is_active`.
-
-Only active scenarios can create environments.
+`title`, optional difficulty/description, required `vm_template_name`, `estimated_time_minutes`, `max_score` and `is_active`. Only active scenarios can start a Lab. `max_score` and flag points are currently metadata; task points drive user scoring.
 
 ### `environments`
 
-Represents one user's run of a scenario. The current repositories expect:
+User/scenario ownership, status, `created_at`, optional `started_at`/`stopped_at`, required `last_activity` and optional `expires_at`.
 
-- user and scenario foreign keys;
-- lifecycle status;
-- creation, start, stop and last-activity timestamps.
+Active states are `Building`, `Running` and `Stopping`. A partial unique index on `user_id` allows only one active environment per user. Another partial index supports expiration scans.
 
-Active lookup considers `Building`, `Running` and `Stopping` states.
+Early schemas included required `network_name`; current code does not use or insert it. The compatibility migration makes the legacy column nullable when present.
 
 ### `instances`
 
-Represents a VM within an environment. The current repositories expect:
+Environment, unique VM name, entry-point flag, optional internal IP, optional host SSH port, status, creation time and last activity. Indexes support environment/status lookup, and a partial unique index protects SSH ports used by `Starting` or `Running` instances.
 
-- VM name and environment foreign key;
-- entry-point flag and optional internal IP;
-- host SSH port;
-- lifecycle status;
-- creation and last-activity timestamps.
+### `flags` and `user_flags`
 
-### `flags`
+Flags belong to scenarios and store exact values plus a points metadata field. `user_flags` records solves and is unique per user/flag.
 
-- Belongs to a scenario.
-- Stores an exact flag value and point value.
+Flag values are plaintext and should be protected differently for production. Current scoring uses the related task's points rather than `flags.points`.
 
-Production deployments should consider hashing or otherwise protecting flag values instead of storing them as plaintext.
+### `admin_activity_logs`
 
-### `user_flags`
+Stores Admin actor, action, entity type/ID, optional JSON details and timestamp. Indexes support recent activity, actor and entity-type filters. Activity insertion is best-effort.
 
-- Joins a user and solved flag.
-- Unique per user and flag to prevent duplicate scoring.
-- Records the solve timestamp.
+## Atomic flag completion
 
-## Transactional scoring
+Correct flag recording and progress completion run in one transaction. `user_flags` uses `ON CONFLICT DO NOTHING`; the same transaction upserts `COMPLETED` progress and earned task points. Any write error rolls back both operations.
 
-Flag insertion and score increment run in one transaction. After this transaction succeeds, task progress is updated separately. Therefore a task-progress failure can occur after points have already been awarded; the service reports this case as an error and should eventually make the entire operation atomic.
+## Migration sequence
 
-## Migration mismatch
+`20260715005000_complete_runtime_schema.sql` intentionally sorts before `20260715010000_score_and_lab_policy.sql`. It adds the scenario, environment and instance columns required by repositories before the later migration reads `last_activity`.
 
-The committed migrations do not currently reproduce the schema expected by the Rust repositories.
+It uses `IF NOT EXISTS` and data backfills so it can also run on databases where these columns were previously added manually. Applied migration files were not modified, preserving SQLx checksums.
 
-Missing from the existing `scenarios` migration:
+The later score/Lab-policy migration adds:
 
-- `estimated_time_minutes`
-- `max_score`
-- `is_active`
+- `user_task_progress.earned_points`;
+- `environments.expires_at`;
+- the global one-active-Lab partial unique index;
+- the active-expiration index.
 
-Missing from the existing `environments` migration:
+## Important constraints and indexes
 
-- `started_at`
-- `stopped_at`
-- `last_activity`
-
-Missing from the existing `instances` migration:
-
-- `ssh_port`
-- `status`
-- `last_activity`
-
-The migration also defines `environments.network_name` as `NOT NULL`, while `create_environment` does not provide it. A new forward-only migration is required; existing migration files should not be rewritten after they have been applied to shared databases.
-
-## Constraints to preserve
-
-- Unique user email.
-- Unique course slug.
-- Unique section order within a course.
-- Unique task order within a section.
-- Unique progress row per user/task.
-- Unique solved flag per user/flag.
-- An appropriate uniqueness rule for active user/scenario environments should be enforced at the database level to prevent concurrent duplicate creation.
+- unique user email and course slug;
+- unique section order per course;
+- unique task order per section;
+- unique progress per user/task;
+- unique solved flag per user/flag;
+- one active environment per user;
+- unique VM name;
+- unique active SSH port;
+- lookup indexes for environment user/scenario/status and instance environment/status.

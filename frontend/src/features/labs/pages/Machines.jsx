@@ -1,5 +1,4 @@
 import { useLabs } from "../hooks/useLabs";
-import Button from "../../../shared/ui/Button";
 
 export default function Machines() {
   const { activeLab, handleCreateLab, isLoading } = useLabs();

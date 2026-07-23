@@ -2,102 +2,99 @@
 
 ## Stack
 
-- React 19.
-- JavaScript and JSX, not TypeScript.
-- Vite 8.
-- React Router.
-- Tailwind CSS.
-- Browser Fetch API.
-- xterm.js with the fit addon.
+- React 19 and JavaScript/JSX
+- React Router
+- Vite 8 and Tailwind CSS 4
+- Fetch API
+- xterm.js with `@xterm/addon-fit`
 
 ## Routes
 
-Public routes:
+Public:
 
-- `/`: landing page.
-- `/login`: login form.
-- `/register`: registration form.
+- `/`
+- `/login`
+- `/register`
 
-Routes wrapped by `RequireAuth`:
+Authenticated through `RequireAuth`:
 
-- `/dashboard`: user dashboard.
-- `/academy`: published course catalog.
-- `/academy/:courseId`: course and task workspace.
-- `/machines`: standalone machine-selection prototype.
-- `/leaderboard`: placeholder.
+- `/dashboard`
+- `/academy`
+- `/academy/:courseId`
+- `/machines`
+- `/profile`
+- `/leaderboard` (placeholder)
 
-The router has no catch-all 404 route at present.
+Admin through `RequireAuth` and `RequireAdmin`:
 
-## Feature structure
+- `/admin`
+- `/admin/academy`
+- `/admin/academy/courses/:courseId`
+- `/admin/scenarios`
+- `/admin/users`
+- `/admin/users/:userId`
+- `/admin/labs`
+- `/admin/flags`
+- `/admin/activity`
 
-### Authentication
-
-`AuthContext` stores the current user and JWT, restores both from `localStorage` and exposes login, registration and logout functions. API clients add the stored token as a Bearer header where implemented.
-
-`RequireAuth` protects browser navigation. Backend middleware remains responsible for actual data security.
-
-### Academy catalog
-
-The Academy loads a published course list and navigates to a full course. The course page displays ordered sections and tasks, selects the first available task by default and renders the selected task in a workspace.
-
-### Task renderer
-
-`TaskRenderer` currently maps:
-
-- `LESSON` to `LessonLayout`.
-- `PRACTICE` to `PracticeLayout`.
-- `LAB` to `LabLayout`.
-- Unknown types to the lesson layout.
-
-`LESSON` displays textual content. `LAB` displays content, machine controls, an embedded terminal and flag submission. `PRACTICE` has a two-panel layout but its terminal does not currently receive an active Lab, so it remains partial.
-
-The `VideoWidget`, `DownloadWidget` and `HintWidget` are placeholders returning no UI.
-
-### Lab state
-
-`useLabs` manages:
-
-- active environment state;
-- loading and error state;
-- active-environment restoration by scenario;
-- environment creation;
-- environment deletion.
-
-When a Lab task is selected, `LabLayout` requests the active environment for its scenario. This lets the UI reconnect after a refresh or after leaving and reopening the task. If creation reports that an environment already exists, the hook also attempts restoration.
-
-The state is local to each hook instance; there is no application-wide Lab context.
-
-### Terminal
-
-`TerminalWrapper` creates an xterm.js instance and connects a WebSocket to:
-
-```text
-ws(s)://<api-origin>/api/lab/terminal/<environment-id>
-```
-
-Terminal input is sent to the socket and received data is written to xterm. Resize events refit the terminal. The socket and terminal are disposed when the component unmounts.
-
-### Flags
-
-`FlagWidget` requires an environment ID and task ID. It submits a normalized flag, shows feedback and disables itself after a correct answer. The server is the source of truth for validation, scoring and completion.
+There is no catch-all 404 route.
 
 ## API configuration
 
-Frontend clients use `VITE_API_URL` as the API origin. If it is absent, they fall back to `http://localhost:3000`. The WebSocket origin is derived by replacing `http` with `ws`.
+`src/config/api.js` is the single API-origin definition. Auth, Academy, Task Progress, Dashboard, Profile, Admin and Lab services all use:
 
-## Shared UI
+```text
+VITE_API_URL or http://localhost:3000
+```
 
-Reusable components currently include `Button`, `Card` and `Input`. Academy-specific panels and widgets live under the Academy workspace rather than the shared UI directory.
+Trailing slashes are removed. The terminal changes the configured `http`/`https` scheme to `ws`/`wss`.
 
-## Legacy and prototype code
+## Authentication
 
-The repository contains Lab components and pages that are not routed by `App.jsx`, including `LabsPage`, `LabWorkspace`, `LabList` and `CreateLabButton`. The `/machines` page also uses hard-coded scenarios and should be treated as a prototype rather than the main Academy Lab flow.
+`AuthContext` stores the user and token in state and `localStorage`, restores them on page load, and exposes login, registration, logout and stored-user updates. `RequireAuth` protects application navigation and `RequireAdmin` checks the stored role for Admin navigation. Backend authorization remains authoritative.
 
-## Known frontend issues
+## Dashboard
 
-- Some widgets and the Practice interaction are incomplete.
-- The leaderboard is a placeholder; profile and admin pages do not exist.
-- There is no 404 route.
-- Lab state is not global across unrelated pages.
-- The standalone Machines page uses hard-coded scenario UUIDs.
-- Some components contain development `console.log` statements.
+The Dashboard loads live data from `/api/dashboard`: current score and statistics, continue-learning cards with current tasks, available courses and completed courses.
+
+## Profile
+
+The profile page loads and edits name/email, changes passwords and uploads/removes a PNG, JPEG or WebP avatar. Avatar data is stored as a data URL and reflected in `AuthContext` and the Navbar.
+
+## Academy and progress
+
+The course workspace combines the course hierarchy with `/api/task-progress` data. It:
+
+- selects the first available incomplete task;
+- marks a new selection `IN_PROGRESS`;
+- displays completed/total tasks, percentage and points;
+- prevents selection of `LOCKED` tasks;
+- advances to the next available task after completion.
+
+`LESSON` tasks have an explicit completion action. `LAB` tasks require flag submission. `PRACTICE` has a layout but its interaction is incomplete.
+
+## Lab and terminal
+
+`useLabs` restores the active environment for a scenario, creates and deletes it and exposes loading/error state. The Navbar separately polls the user's global active Lab every minute, displays its countdown and can stop it.
+
+The terminal opens:
+
+```text
+ws(s)://<api-origin>/api/lab/terminal/<environment-id>?token=<encoded-jwt>
+```
+
+It forwards xterm input/output and cleans up listeners, socket and terminal on unmount.
+
+## Administration
+
+The Admin UI contains overview statistics, Academy content editing, scenarios, searchable/paginated users, user details and operations, Labs and termination, flags and activity logs. Client-side Admin routing supplements the backend's JWT/Admin middleware.
+
+## Legacy and incomplete UI
+
+- `LabsPage`, `LabWorkspace`, `LabList` and `CreateLabButton` are not part of the main routed Academy flow.
+- `/machines` uses hard-coded scenario UUIDs.
+- `/leaderboard` is a placeholder.
+- `VideoWidget`, `DownloadWidget` and `HintWidget` return no functional experience.
+- Practice does not connect to a complete active interaction environment.
+- Lab state is not centralized in one application-wide context.
+- Development console logging remains in some components.

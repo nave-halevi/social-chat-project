@@ -1,4 +1,3 @@
-import React from "react";
 import TerminalWrapper from "./TerminalWrapper";
 
 const LabList = ({ activeLab }) => {

@@ -1,107 +1,81 @@
 # Features
 
-This document distinguishes complete, partial and planned behavior. A source file existing in the repository does not necessarily mean the feature is complete or production-ready.
-
 ## Implemented
 
-### Authentication
+### Identity and profile
 
-- User registration with bcrypt password hashing.
-- Email/password login.
-- JWT generation and verification.
-- Frontend session restoration from local storage.
-- Protected frontend application routes.
-- Role-aware middleware for backend routes.
-- Admin-protected user listing.
+- Registration and bcrypt password hashing.
+- Email/password login and 24-hour JWTs.
+- Current role and active-account checks on protected REST requests.
+- Browser session restoration.
+- User name/email editing.
+- Password change with current-password verification.
+- PNG/JPEG/WebP avatar upload/removal.
 
-### Academy backend
+### Dashboard
 
-- Published course catalog.
-- Full course response containing ordered sections and tasks.
-- Course create, update and delete.
-- Section create, read, update and delete.
-- Task create, read, update and delete.
-- Optional task-to-scenario relationship.
+- Live score and course/task statistics.
+- Continue-learning courses and current task.
+- Available and completed course lists.
 
-### Academy frontend
+### Academy
 
-- Course catalog and course cards.
-- Full course workspace.
-- Section/task sidebar and initial task selection.
-- Generic task renderer for `LESSON`, `PRACTICE` and `LAB`.
-- Learning and interaction panels.
-- Markdown/text lesson content.
+- Published catalog and full ordered course workspace.
+- Admin CRUD for courses, sections and tasks.
+- `LESSON`, `PRACTICE` and `LAB` rendering.
+- Persistent `NOT_STARTED`, `IN_PROGRESS` and `COMPLETED` progress.
+- Sequential `AVAILABLE`/`LOCKED` access.
+- Progress percentage and earned/total points.
+- Explicit non-Lab content completion.
 
-### Lab lifecycle
+### Lab and terminal
 
-- Scenario validation.
-- Per-user/per-scenario active environment lookup.
-- Environment and instance state tracking.
-- Available host-port allocation.
-- VirtualBox template cloning.
-- VM startup and SSH-readiness wait.
-- Failure cleanup.
-- Active Lab restoration in the Academy workspace.
-- VM termination and record-state updates.
+- Active scenario validation.
+- One active environment globally per user.
+- Environment/instance state and timestamps.
+- VirtualBox clone/start/delete and SSH readiness.
+- Active Lab restoration by scenario and global active lookup.
+- Idle expiration, activity refresh and periodic cleanup.
+- Authenticated, ownership-checked WebSocket terminal.
+- Navbar countdown and Stop Lab action.
 
-### Terminal
+### Flags and score
 
-- Embedded xterm.js terminal.
-- WebSocket connection by environment ID.
-- Backend WebSocket-to-SSH bridge.
-- Bidirectional terminal input/output.
-- Terminal resize and component cleanup.
+- Ownership, running-state, scenario and task-access validation.
+- Exact flag matching.
+- Atomic `user_flags` insertion and task completion.
+- Duplicate solve protection.
+- `earned_points` source-of-truth scoring.
 
-### CTF, score and progress
+### Administration
 
-- Flag input in Lab tasks.
-- Environment ownership and running-state validation.
-- Task-to-scenario validation.
-- Exact flag verification.
-- Transactional flag recording and score increment.
-- Duplicate-score prevention.
-- Task completion record after a correct or previously solved flag.
+- Admin route guard and backend role authorization.
+- Statistics/recent activity Dashboard.
+- User search, pagination, details, enable/disable, role and password reset.
+- Protection for self-actions and the final active Admin.
+- Course/section/task editor.
+- Scenario CRUD and activation.
+- Flag CRUD with masked list values.
+- Lab listing and forced termination.
+- Filtered activity log.
 
-## Partial or prototype features
+## Partial or prototype
 
-### Authorization
+- Practice layout exists without a complete interaction model.
+- Video, download and hint widgets are placeholders.
+- Machines uses hard-coded scenarios and is separate from Academy.
+- Leaderboard is a placeholder.
+- Provisioning is synchronous with a general loading state.
+- Navbar polling provides global Lab visibility, but there is no unified application-wide Lab store.
+- Cleanup handles expired database environments but not complete restart reconciliation/orphan discovery.
 
-JWT and admin middleware are implemented, but Academy admin and Lab routes do not currently apply them. Those routes are not production-secure.
+## Missing
 
-### Practice tasks
-
-The Practice layout exists, but its terminal is not connected to an active Lab environment.
-
-### Additional content widgets
-
-`VideoWidget`, `DownloadWidget` and `HintWidget` exist as empty placeholders.
-
-### Machines page
-
-The `/machines` route displays selectable machines but uses hard-coded scenario UUIDs. It is separate from the primary Academy Lab experience.
-
-### Dashboard and leaderboard
-
-The dashboard contains static/demo content. The leaderboard route is a placeholder, even though users already have a stored total score.
-
-### Lab status UX
-
-Active restoration exists, but provisioning is a single long-running request with only a general loading state. There is no queued/building progress view, timeout recovery interface or automatic idle cleanup.
-
-### Database setup
-
-Migrations exist, but they do not yet include all columns required by the current Lab repositories.
-
-## Planned or missing
-
-- User profile page.
-- Admin frontend for users, courses, sections, tasks and scenarios.
-- Scenario and VM-template management UI/API.
-- Real leaderboard and statistics.
+- Video/YouTube lesson support.
+- Complete Practice, video, download and hint experiences.
+- Real leaderboard.
 - Certificates and achievements.
-- Complete video, download, hint and practice experiences.
-- Application-wide Lab state and lifecycle notifications.
-- Asynchronous provisioning jobs and progress polling.
-- Idle timeout and orphaned-VM cleanup.
-- Production authorization for every write and user-owned resource.
-- Automated backend, frontend and end-to-end test coverage.
+- Background provisioning jobs, progress polling, retry and cancellation.
+- Comprehensive structured logging, tracing and metrics.
+- Automated backend, frontend and end-to-end tests.
+- Production deployment, backup, recovery and secret-management documentation.

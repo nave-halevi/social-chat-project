@@ -8,9 +8,7 @@ use crate::{
         dto::lab::{CreateLabResponseDto, LabStatusResponseDto},
         status::{EnvironmentStatus, InstanceStatus},
     },
-    repositories::{
-        ctf_repo, environment_repo, instance_repo, scenario_repo, task_progress_repo, task_repo,
-    },
+    repositories::{ctf_repo, environment_repo, instance_repo, scenario_repo, task_repo},
     services::task_progress_service,
     utils::{network, virtualbox_manager},
 };
@@ -329,30 +327,17 @@ pub async fn verify_and_submit_flag(
         }
     };
 
-    match ctf_repo::submit_and_score(pool, user_id, flag_id).await {
-        Ok(_) => {
-            let earned_points = task_progress_repo::mark_task_completed(pool, user_id, task_id)
-                .await
-                .map_err(|error| {
-                    format!("Flag was accepted, but task progress could not be updated: {error}")
-                })?;
+    match ctf_repo::submit_flag_and_complete_task(pool, user_id, flag_id, task_id).await {
+        Ok(result) if result.newly_solved => Ok(format!(
+            "✅ Correct! You earned {} points.",
+            result.earned_points
+        )),
 
-            Ok(format!("✅ Correct! You earned {} points.", earned_points))
-        }
+        Ok(_) => Ok("⚠️ You already submitted this flag!".to_string()),
 
-        Err(sqlx::Error::Database(database_error)) if database_error.is_unique_violation() => {
-            task_progress_repo::mark_task_completed(pool, user_id, task_id)
-                .await
-                .map_err(|error| {
-                    format!(
-                        "Flag was already solved, but task progress could not be updated: {error}"
-                    )
-                })?;
-
-            Ok("⚠️ You already submitted this flag!".to_string())
-        }
-
-        Err(error) => Err(format!("Failed to submit flag: {error}")),
+        Err(error) => Err(format!(
+            "Failed to record the flag and task completion: {error}"
+        )),
     }
 }
 

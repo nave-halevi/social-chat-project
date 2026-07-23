@@ -4,78 +4,85 @@
 
 ```text
 React application
-    | REST/JSON + JWT
+    | REST/JSON + Authorization: Bearer <JWT>
     v
-Axum routes -> middleware -> handlers -> services -> repositories -> PostgreSQL
-                                 |
-                                 +-> VirtualBox lifecycle
+Axum routes -> auth/admin middleware -> handlers -> services -> repositories
+                                                               |
+                                                               v
+                                                           PostgreSQL
 
 Browser xterm.js
-    | WebSocket
+    | WebSocket /api/lab/terminal/:environment_id?token=<JWT>
     v
-Axum terminal handler -> SSH session -> Lab virtual machine
+Terminal handler -> ownership/state checks -> SSH -> VirtualBox Lab VM
 ```
 
 ## Frontend
 
 The React application is organized by feature:
 
-- `features/auth`: registration, login and local session restoration.
-- `features/academy`: course catalog, course workspace and typed task layouts.
-- `features/labs`: Lab API client and machine state hooks.
-- `features/ctf`: terminal and flag-submission behavior.
-- `shared/ui`: reusable visual components.
+- `features/auth`: registration, login and session restoration.
+- `features/dashboard`: live learning summary.
+- `features/profile`: identity, password and avatar management.
+- `features/academy`: catalog, workspace and course progress.
+- `features/labs`: Lab lifecycle clients and state hooks.
+- `features/ctf`: terminal behavior.
+- `features/admin`: protected operational and content-management UI.
+- `config/api.js`: shared REST and WebSocket origin configuration.
 
-`RequireAuth` protects application pages in the browser. This improves navigation behavior but is not a substitute for backend authorization.
-
-The Academy workspace selects a task from the course hierarchy and delegates rendering to `TaskRenderer`. Lab state is scoped to `useLabs`; `LabLayout` restores the active environment for the selected scenario from the backend.
+`RequireAuth` protects authenticated browser routes and `RequireAdmin` protects `/admin`. These guards are UX boundaries; backend middleware remains authoritative.
 
 ## Backend layers
 
-### Routes
+- Routes define `/api` groups and attach middleware.
+- Authentication middleware verifies the Bearer JWT, loads the current user role/state and adds refreshed claims to the request.
+- Admin middleware requires `Role::Admin`.
+- Handlers deserialize requests and map service results to HTTP responses.
+- Services implement validation, orchestration and Lab lifecycle rules.
+- Repositories own SQL and transactions.
 
-Routes define the public HTTP surface under `/api`. Authentication, user, Academy and Lab routes are separate modules.
+Route groups cover auth, users, Academy, task progress, Dashboard, profile, Lab and Admin operations.
 
-### Middleware
+## Identity and authorization
 
-The authentication middleware validates a Bearer JWT and adds its claims to the request. The admin middleware requires an authenticated claim with the `admin` role.
+Protected REST handlers derive user identity from verified JWT claims; they do not accept an acting `user_id` from the client. Disabled accounts receive `403`. Admin actions use the current role loaded by authentication middleware rather than trusting the role embedded in an older token.
 
-The user-list route uses both middleware layers. Academy admin and Lab routes currently do not apply them; this is a known security gap.
+The terminal cannot use an HTTP Authorization header from the browser WebSocket API, so it accepts `token` in the query string and performs equivalent validation directly. It also verifies environment ownership.
 
-### Handlers
+## Course-progress model
 
-Handlers deserialize request DTOs, call a service and convert the result into an HTTP response. Some handlers currently map several distinct service failures to a single status code.
-
-### Services
-
-Services contain orchestration and business rules. For example, the instance service validates scenarios, coordinates database state and VirtualBox, validates flags and records task completion.
-
-### Repositories
-
-Repositories own SQL operations for users, Academy data, scenarios, environments, instances, flags and task progress.
+Course tasks are ordered by section and task indexes. The first incomplete task is `AVAILABLE`; later incomplete tasks are `LOCKED`. Selecting an available new task marks it `IN_PROGRESS`. Non-Lab tasks can be completed through the progress API. Lab tasks can only be completed through correct flag submission.
 
 ## Lab creation sequence
 
 ```text
 POST /api/lab/create
+    -> derive user from JWT
+    -> reject another non-expired active Lab for the user
+    -> delete an expired active Lab if found
     -> validate active scenario
-    -> reject an existing active environment
-    -> insert environment with Building status
-    -> allocate an SSH host port
-    -> insert instance with Starting status
-    -> clone the configured VirtualBox template
-    -> start VM and configure port forwarding
+    -> insert Building environment with expires_at
+    -> allocate host SSH port and insert Starting instance
+    -> clone and start the configured VirtualBox template
     -> wait up to 120 seconds for SSH
     -> mark instance and environment Running
-    -> return environment ID and SSH port
+    -> return environment ID, SSH port and expiration
 ```
 
-Failures mark the environment or instance as `Failed` and attempt to remove the cloned VM. Deletion transitions records through stopping states and removes the VirtualBox machine.
+A partial unique index on `environments(user_id)` enforces one active Lab per user for `Building`, `Running` and `Stopping` states.
 
-## Terminal sequence
+## Activity and cleanup
 
-The browser opens `/api/lab/terminal/:environment_id` as a WebSocket. The handler resolves the instance and SSH port from the environment ID, verifies that it is running, establishes an SSH connection and bridges terminal input/output.
+Terminal text input refreshes Lab activity at most once per minute. Flag submission also refreshes it. Each refresh sets `last_activity = now()` and extends `expires_at` by `LAB_IDLE_TIMEOUT_MINUTES`.
 
-## Data ownership and trust boundary
+The backend starts a cleanup loop that runs every 60 seconds. Each pass selects up to ten expired active environments and uses the normal Lab deletion flow to remove the VM and mark records destroyed.
 
-The current Lab API accepts `user_id` from request bodies and route parameters. Although the frontend sends a JWT, Lab routes do not validate it. The intended architecture is to derive the user identity from verified JWT claims and treat client-provided identifiers only as resource identifiers.
+## Atomic flag completion
+
+After ownership, state, scenario, task access and flag checks, one PostgreSQL transaction:
+
+1. inserts `user_flags` with `ON CONFLICT DO NOTHING`;
+2. upserts the task as `COMPLETED` and stores `tasks.points` in `earned_points`;
+3. commits both changes together.
+
+An error in either write rolls back both. A previously inserted flag still repairs/completes missing task progress without adding score twice.

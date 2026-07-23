@@ -117,18 +117,16 @@ export default function CoursePage() {
       return;
     }
 
-    const nextTask = findNextAvailableTask(progress);
+    const initialTask =
+      findNextAvailableTask(progress) || orderedTasks[orderedTasks.length - 1];
 
-    if (nextTask) {
-      handleSelectTask(nextTask, progress);
-      return;
-    }
+    const selectionTimer = window.setTimeout(() => {
+      handleSelectTask(initialTask, progress);
+    }, 0);
 
-    const lastTask = orderedTasks[orderedTasks.length - 1];
-
-    if (lastTask) {
-      setSelectedTask(lastTask);
-    }
+    return () => {
+      window.clearTimeout(selectionTimer);
+    };
   }, [
     course,
     progress,

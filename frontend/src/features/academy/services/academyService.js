@@ -1,4 +1,7 @@
-const BASE_URL = "http://localhost:3000/api/academy";
+import { API_BASE_URL } from "../../../config/api";
+
+const ACADEMY_URL = `${API_BASE_URL}/academy`;
+const TASK_PROGRESS_URL = `${API_BASE_URL}/task-progress`;
 
 const getAuthHeaders = () => {
   const token = localStorage.getItem("token");
@@ -10,7 +13,7 @@ const getAuthHeaders = () => {
 };
 
 export const getCourses = async () => {
-  const response = await fetch(`${BASE_URL}/courses`, {
+  const response = await fetch(`${ACADEMY_URL}/courses`, {
     method: "GET",
     headers: getAuthHeaders(),
   });
@@ -25,7 +28,7 @@ export const getCourses = async () => {
 };
 
 export const getCourse = async (id) => {
-  const response = await fetch(`${BASE_URL}/courses/${id}/full`, {
+  const response = await fetch(`${ACADEMY_URL}/courses/${id}/full`, {
     method: "GET",
     headers: getAuthHeaders(),
   });
@@ -46,16 +49,13 @@ export const getCourseProgress = async (courseId) => {
 
   const token = localStorage.getItem("token");
 
-  const response = await fetch(
-    `http://localhost:3000/api/task-progress/courses/${courseId}`,
-    {
-      method: "GET",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: token ? `Bearer ${token}` : "",
-      },
+  const response = await fetch(`${TASK_PROGRESS_URL}/courses/${courseId}`, {
+    method: "GET",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: token ? `Bearer ${token}` : "",
     },
-  );
+  });
 
   const data = await response.json().catch(() => null);
 
@@ -74,7 +74,7 @@ export const completeContentTask = async (taskId) => {
   const token = localStorage.getItem("token");
 
   const response = await fetch(
-    `http://localhost:3000/api/task-progress/tasks/${taskId}/complete`,
+    `${TASK_PROGRESS_URL}/tasks/${taskId}/complete`,
     {
       method: "POST",
       headers: {
@@ -100,16 +100,13 @@ export const startTask = async (taskId) => {
 
   const token = localStorage.getItem("token");
 
-  const response = await fetch(
-    `http://localhost:3000/api/task-progress/tasks/${taskId}/start`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: token ? `Bearer ${token}` : "",
-      },
+  const response = await fetch(`${TASK_PROGRESS_URL}/tasks/${taskId}/start`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: token ? `Bearer ${token}` : "",
     },
-  );
+  });
 
   const data = await response.json().catch(() => null);
 
