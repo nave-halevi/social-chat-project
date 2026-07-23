@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
 use uuid::Uuid;
 
-#[derive(Debug, Serialize, Deserialize, FromRow)]
+#[derive(Debug, FromRow)]
 pub struct User {
     pub id: Uuid,
     pub user_name: String,
@@ -51,6 +51,19 @@ pub struct UserResponse {
     pub role: Role,
     pub total_score: i32,
     pub avatar_url: Option<String>,
+}
+
+impl From<User> for UserResponse {
+    fn from(user: User) -> Self {
+        Self {
+            id: user.id,
+            user_name: user.user_name,
+            email: user.email,
+            role: user.role,
+            total_score: user.total_score,
+            avatar_url: user.avatar_url,
+        }
+    }
 }
 
 #[derive(Serialize)]

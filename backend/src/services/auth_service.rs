@@ -8,17 +8,14 @@ use crate::models::user::{
 };
 use crate::repositories::user_repo;
 
-pub async fn register(
-    pool: &PgPool,
-    req: RegisterRequest,
-) -> Result<crate::models::user::User, String> {
+pub async fn register(pool: &PgPool, req: RegisterRequest) -> Result<UserResponse, String> {
     let hashed = hash(&req.password, DEFAULT_COST).map_err(|e| e.to_string())?;
 
     let user = user_repo::create_user(pool, &req.user_name, &req.email, &hashed)
         .await
         .map_err(|e| e.to_string())?;
 
-    Ok(user)
+    Ok(user.into())
 }
 
 pub async fn login(pool: &PgPool, req: LoginRequest) -> Result<LoginResponse, String> {
@@ -41,16 +38,8 @@ pub async fn login(pool: &PgPool, req: LoginRequest) -> Result<LoginResponse, St
         return Err("This account has been disabled.".to_string());
     }
 
-    let user_response = UserResponse {
-        id: user.id,
-        user_name: user.user_name,
-        email: user.email,
-        role: user.role.clone(),
-        total_score: user.total_score,
-        avatar_url: user.avatar_url,
-    };
-
     let token = generate_token(&user.id.to_string(), user.role.clone())?;
+    let user_response = user.into();
 
     let response = LoginResponse {
         token,
