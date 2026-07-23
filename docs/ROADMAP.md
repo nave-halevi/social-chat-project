@@ -2,69 +2,56 @@
 
 ## Completed foundations
 
-- Rust/Axum backend and PostgreSQL repository layers.
-- Registration, login, JWT generation and role claims.
-- Academy course, section and task backend CRUD.
-- Published course catalog and full-course frontend workspace.
-- Typed task renderer for lesson, practice and Lab layouts.
-- Scenario-backed VirtualBox machine creation and deletion.
-- Environment and instance lifecycle models.
-- Browser terminal through WebSocket and SSH.
-- Active Lab restoration by user and scenario.
-- Flag validation, duplicate prevention, scoring and task completion.
+- Rust/Axum/PostgreSQL backend and React frontend.
+- Registration, login, JWT/current-account authorization and Admin roles.
+- Profile editing, password change and avatars.
+- Live Dashboard and progress-based scoring.
+- Academy course/section/task management and frontend workspace.
+- Sequential task progress and locked/available behavior.
+- VirtualBox Lab provisioning, deletion and restoration.
+- One active Lab per user.
+- Idle expiration, Navbar countdown and periodic cleanup.
+- Authenticated WebSocket-to-SSH terminal.
+- Atomic flag recording and task completion.
+- Admin users, Academy, scenarios, flags, Labs and activity views.
+- Migration compatibility repair for repository-required Lab columns.
 
-## Immediate: correctness and security
+## Immediate correctness and security
 
-- Add a forward migration for the Lab columns currently required by repositories.
-- Resolve the `network_name` mismatch between the migration and environment creation.
-- Enable JWT and admin middleware for `/api/academy/admin`.
-- Protect all Lab HTTP and WebSocket routes.
-- Derive the acting user from JWT claims instead of accepting trusted `user_id` values.
-- Add PUT to the allowed CORS methods.
-- Map service failures to meaningful HTTP status codes and a shared error format.
-- Make flag scoring and task-progress completion one atomic transaction.
+- Move SSH credentials out of source code.
+- Standardize API errors and semantic status codes.
+- Add validation constraints for status/type values to migrations where appropriate.
+- Prepare SQLx offline metadata or document the required compile-time database workflow.
 
-## Near term: Lab reliability and UX
+## Lab reliability and UX
 
 - Move VM provisioning to background jobs.
-- Expose building, running, stopping and failure progress to the UI.
-- Add provisioning cancellation and retry behavior.
-- Add idle timeout, heartbeat and orphaned-VM cleanup.
-- Reconcile database state with VirtualBox state after backend restart.
-- Prevent port-allocation races.
-- Define whether active Lab limits apply per scenario or globally.
-- Add clear terminal reconnection behavior.
+- Expose detailed building/running/stopping/failure progress.
+- Add cancellation, retry and explicit terminal reconnect behavior.
+- Reconcile PostgreSQL with VirtualBox state after restart.
+- Detect and clean orphaned VMs.
+- Reserve host ports atomically.
+- Improve cleanup observability and failure retry.
 
-## Near term: Academy experience
+## Academy experience
 
-- Complete the Practice interaction model.
-- Implement video, download and hint widgets.
-- Persist and display task progress throughout the course UI.
-- Add locked/available/in-progress task behavior.
-- Remove development logs and retire unused legacy Lab components.
-- Replace the hard-coded Machines page with scenario data or remove it.
+- Complete Practice interaction.
+- Add lesson video/YouTube support.
+- Implement download and hint widgets.
+- Replace or remove the hard-coded Machines prototype.
+- Remove unused legacy Lab components and development logs.
 
-## Administration
+## User and community
 
-- Build an admin dashboard.
-- Add frontend management for courses, sections and tasks.
-- Add scenario and VirtualBox-template management.
-- Add validation and ordering controls.
-- Add operational views for active, failed and orphaned environments.
-
-## User and community features
-
-- User profile and learning history.
-- Real leaderboard based on stored scores.
-- Statistics and course completion analytics.
+- Real leaderboard from progress-based scores.
+- Learning-history detail and completion analytics.
 - Achievements and certificates.
 
 ## Quality and operations
 
-- Backend unit and integration tests.
-- Frontend component and hook tests.
-- End-to-end Academy Lab and flag tests.
-- Structured logging and request tracing.
-- Metrics for VM startup time, failures and active environments.
-- Deployment, backup and disaster-recovery documentation.
-- Secret management and production configuration guidance.
+- Backend unit/integration tests.
+- Frontend component/hook tests.
+- End-to-end Academy, Lab and flag tests.
+- Structured request tracing and metrics.
+- Deployment, backup and disaster-recovery guidance.
+- Production secrets and configuration management.

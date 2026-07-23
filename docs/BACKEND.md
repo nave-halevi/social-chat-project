@@ -1,121 +1,100 @@
 # Backend
 
-## Stack
+## Stack and structure
 
-- Rust 2024 edition.
-- Axum 0.7 for REST and WebSocket routes.
-- Tokio for the asynchronous runtime.
-- PostgreSQL and SQLx.
-- JWT (`jsonwebtoken`) and bcrypt authentication.
-- `ssh2` for terminal sessions.
-- VirtualBox command-line integration for VM lifecycle.
-
-The server listens on `0.0.0.0:3000` and mounts application routes below `/api`.
-
-## Source structure
+The backend uses Rust 2024, Axum 0.7, Tokio, SQLx/PostgreSQL, bcrypt, JWT, `ssh2` and VirtualBox command-line integration.
 
 ```text
 src/
-├── routes/        HTTP route definitions
-├── middleware/    JWT and role authorization
-├── handlers/      HTTP request/response mapping
-├── services/      Business logic and orchestration
-├── repositories/  SQL queries
-├── models/        Entities, DTOs, request models and statuses
-├── utils/         VirtualBox, SSH, port and system helpers
-└── errors/        Shared application error type
+├── routes/        route groups and middleware attachment
+├── middleware/    JWT/current-user and Admin authorization
+├── handlers/      HTTP and WebSocket request mapping
+├── services/      validation and orchestration
+├── repositories/  SQL queries and transactions
+├── models/        entities, DTOs and statuses
+├── utils/         VirtualBox, SSH, ports and host helpers
+└── errors/        shared application errors
 ```
+
+The server binds `0.0.0.0:3000` and mounts all application routes under `/api`.
 
 ## Route groups
 
-- `/api/auth`: register and login.
-- `/api/users`: admin-protected user listing.
-- `/api/academy/courses`: public course reads.
-- `/api/academy/admin`: course, section and task management.
-- `/api/lab`: creation, deletion, status, active-environment lookup, flag submission and terminal WebSocket.
+- `/api/auth`: registration and login.
+- `/api/users`: legacy Admin-only user list.
+- `/api/academy`: public course reads and Admin content CRUD.
+- `/api/task-progress`: course progress, start and complete.
+- `/api/dashboard`: authenticated learning Dashboard.
+- `/api/profile`: profile, password and avatar.
+- `/api/lab`: lifecycle, status, active Lab, flag and terminal.
+- `/api/admin`: operational Dashboard, users, Labs, flags, scenarios and activity.
 
-The exact contracts are documented in [API](API.md).
+See [API](API.md) for contracts.
 
 ## Authentication and authorization
 
-The authentication middleware expects `Authorization: Bearer <token>`, verifies it and stores claims on the request. The admin middleware reads those claims and requires the `admin` role.
+REST authentication expects `Authorization: Bearer <token>`. JWT claims contain `sub`, expiration and role, but middleware also loads `role` and `is_active` from `users` on every protected request. Missing/invalid users receive `401`; disabled users receive `403`.
 
-Current protection:
+Admin middleware runs after authentication and requires the refreshed `admin` role. Academy Admin and `/api/admin` routes use both layers.
 
-- `/api/users`: authentication and admin role required.
-- `/api/academy/admin`: middleware exists but is currently commented out.
-- `/api/lab`: currently has no backend authentication middleware.
-- Public Academy reads and auth endpoints: public.
+The terminal accepts the JWT through `?token=` because browser WebSockets cannot set the Authorization header. It validates the account and verifies that the environment belongs to the token subject.
 
-Consequently, the Academy admin and Lab routes must not yet be considered production-secure. Lab operations currently trust a client-supplied `user_id`.
+## Academy and progress
 
-## Academy service
+Public Academy reads expose published courses and full course hierarchies. Admin services validate titles, slugs, ordering, task types and scenario relationships.
 
-The Academy service provides:
+Progress status values are `NOT_STARTED`, `IN_PROGRESS` and `COMPLETED`. Access status values are `AVAILABLE` and `LOCKED`; a completed task is represented as `progress_status: COMPLETED` with `access_status: AVAILABLE`.
 
-- Published course listing and full course aggregation.
-- Course create, update and delete.
-- Ordered section create, read, update and delete.
-- Ordered task create, read, update and delete.
-- Conversion between database entities and API DTOs.
+Non-Lab tasks can be completed through `/task-progress/tasks/:id/complete`. Lab tasks reject that endpoint and require a correct flag.
 
-A full course response groups joined rows into their course, sections and tasks hierarchy.
+## Scoring
 
-## Lab service
+`user_task_progress.earned_points` is the score source of truth. Dashboard, profile, login and Admin user queries calculate total score as the sum of these rows. The legacy `users.total_score` column remains for schema compatibility but is not updated or used as the authoritative displayed score.
 
-### Creation
+Completion stores `tasks.points`; `flags.points` is currently administrative metadata and is not used by the scoring calculation.
 
-Creation validates an active scenario, checks for an existing active environment, creates database records, allocates a host SSH port, clones and starts the VM, waits for SSH readiness and marks the records as running.
+## Lab lifecycle
 
-The HTTP request remains open while provisioning and may wait up to 120 seconds for SSH. A future job-based flow is listed in the roadmap.
+The service allows one active Lab globally per user. It provisions synchronously, tracks environment/instance states and returns `expires_at`. Status and active-Lab reads remove an already expired Lab before responding.
 
-### Restoration and status
+Environment states modeled by the code are `Building`, `Running`, `Stopping`, `Stopped`, `Destroyed` and `Failed`. Instance states are `Starting`, `Running`, `Stopping`, `Stopped`, `Destroyed` and `Failed`.
 
-The service can return an active environment by user and scenario or return status for a known environment. These responses include environment and instance state, VM name, SSH port and timestamps where available.
+Lab deletion is idempotent for an already destroyed environment. It transitions through stopping states, deletes the VirtualBox VM and records `Destroyed`.
 
-### Deletion
+## Idle expiration
 
-Deletion verifies that the environment belongs to the supplied user, marks it as stopping, deletes the VirtualBox VM and records the terminal states in PostgreSQL.
+`LAB_IDLE_TIMEOUT_MINUTES` controls the positive timeout and defaults to 20. A background Tokio task scans every minute and deletes up to ten expired active environments. Terminal input and flag submissions refresh activity.
 
-### Flag submission
+## Flag submission
 
-Submission requires a running user environment and a `LAB` task attached to the same scenario. A correct flag is inserted transactionally into `user_flags` and increments `users.total_score`. The task is then marked `COMPLETED`. A unique constraint prevents duplicate scoring.
+Submission validates:
 
-## Status values
+- JWT-derived ownership;
+- running environment;
+- task/scenario relationship;
+- sequential task access;
+- non-empty exact flag value.
 
-Environment states used by the application:
-
-- `Building`
-- `Running`
-- `Stopping`
-- `Destroyed`
-- `Failed`
-
-Instance states used by the application:
-
-- `Starting`
-- `Running`
-- `Stopping`
-- `Stopped`
-- `Failed`
-
-## VirtualBox and SSH assumptions
-
-- The backend host has VirtualBox and `VBoxManage` installed.
-- Every active scenario references a registered VM template.
-- The template accepts the SSH credentials expected by the SSH helper.
-- A host port can be allocated and forwarded to guest SSH.
-- The backend process has permission to clone, start and delete VMs.
+Correct flag insertion and progress completion share one database transaction. Duplicate `user_flags` entries are ignored by the unique constraint and do not award points again.
 
 ## Configuration
 
-The backend requires `DATABASE_URL`. JWT and SSH-related configuration should be reviewed in the associated service and utility modules before deployment; secrets must not be committed.
+Required:
 
-## Known backend issues
+- `DATABASE_URL`
+- `JWT_SECRET`
 
-- Academy admin and Lab routes require backend authorization middleware.
-- Lab user identity should come from JWT claims rather than request JSON.
-- CORS currently allows GET, POST and DELETE but not PUT, although Academy update endpoints use PUT.
-- Service errors are not consistently mapped to semantic HTTP status codes.
+Optional:
+
+- `LAB_IDLE_TIMEOUT_MINUTES` (positive integer, default `20`)
+
+VirtualBox must be installed and scenario template names must resolve. SSH credentials are currently hard-coded development values in the terminal handler and must be externalized for production.
+
+## Known backend limitations
+
 - Provisioning is synchronous and can hold a request for up to 120 seconds.
-- The current migrations do not fully match repository expectations; see [Database](DATABASE.md).
+- Port availability is discovered before use but is not reserved atomically.
+- Error bodies/status codes are not uniform across all handlers.
+- Admin activity logging is best-effort and does not fail the primary operation.
+- The cleanup loop does not perform full database/VirtualBox reconciliation after restart.
+- No prepared SQLx offline metadata or meaningful automated test suite is committed.

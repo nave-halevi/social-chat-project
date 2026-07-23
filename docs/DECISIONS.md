@@ -1,46 +1,47 @@
 # Technical Decisions
 
-## Rust, Axum and Tokio
+## Rust, Axum, Tokio and PostgreSQL
 
-Rust provides memory safety and predictable performance for long-running infrastructure operations. Axum supplies the HTTP and WebSocket server, while Tokio runs asynchronous database, network and terminal work.
-
-## PostgreSQL and SQLx
-
-The project uses PostgreSQL for relational integrity across users, course content, environments, instances, flags and progress. SQLx is used for typed query mapping and transactions.
-
-SQLx compile-time query checking requires the development database or prepared offline metadata to match the schema expected by the repositories.
+Rust provides memory safety for long-running infrastructure operations. Axum supplies REST and WebSocket routing, Tokio runs asynchronous work and blocking VirtualBox/SSH operations are isolated from the async executor. PostgreSQL and SQLx provide relational constraints, typed queries and transactions.
 
 ## Layered backend
 
-The backend is split into routes, middleware, handlers, services and repositories. HTTP concerns remain in handlers, orchestration remains in services and SQL remains in repositories.
+Routes attach middleware, handlers map HTTP data, services contain validation/orchestration and repositories own SQL. Cross-write atomicity, such as flag completion, belongs in the repository transaction boundary.
 
-## JWT authentication
+## JWT plus current database state
 
-Login produces a JWT containing identity and role claims. Protected backend routes should validate the Bearer token and derive the acting user from those claims. Browser-side route protection is only a UX layer.
+JWTs identify the subject and expire after 24 hours. Protected middleware also loads current `role` and `is_active` from PostgreSQL on each request. This makes account disabling and role changes immediate and prevents stale role claims from authorizing Admin operations.
 
-## VirtualBox laboratories
+## JWT-derived resource ownership
 
-VirtualBox provides isolated, cloneable machines from a scenario template. VM lifecycle calls are blocking system operations and therefore run through Tokio's blocking-task facility.
+Lab REST routes derive the acting user from JWT claims. Client requests carry scenario, environment or task resource identifiers, never a trusted acting `user_id`.
+
+The browser WebSocket API cannot set an Authorization header, so terminal connections pass the JWT in the query string. The handler repeats authentication/account checks and enforces environment ownership.
 
 ## Environment and instance separation
 
-An environment represents a user's scenario session and its lifecycle. An instance represents a VM inside that environment. This allows the model to support multiple instances per environment later, even though the current flow creates one entry-point instance.
+An environment represents a user's scenario session; an instance represents a VM within it. The current flow creates one entry-point instance but the schema can represent more later.
 
-## Environment ID for terminal connections
+## One active Lab globally
 
-The WebSocket URL uses an environment UUID rather than exposing an SSH port. The backend resolves the running instance and host port, keeping host networking details out of the browser contract.
+A user may have one environment in `Building`, `Running` or `Stopping`, regardless of scenario. Service checks improve error messages and a partial unique database index protects concurrent requests.
 
-## WebSocket-to-SSH bridge
+## Idle expiration
 
-xterm.js provides the browser terminal. Axum upgrades the request to a WebSocket and bridges it to an SSH session on the VM. This avoids exposing SSH directly to the browser.
+Active environments store `last_activity` and `expires_at`. The timeout defaults to 20 minutes and is configurable. Terminal input and flag submission extend the deadline; a periodic worker uses the normal deletion flow for expired Labs.
 
-## Scenario-backed Lab tasks
+## Synchronous provisioning
 
-Academy tasks optionally reference scenarios. Only `LAB` tasks are eligible for scenario progress validation. A correct flag is checked against the environment scenario before the task is marked completed.
+VM provisioning remains inside the create request and waits up to 120 seconds for SSH. This is simple but limits progress reporting, cancellation and retry; background jobs remain planned.
 
-## Known decisions still required
+## Progress-based scoring
 
-- Whether a user may run one active environment per scenario or one globally.
-- How idle environments are expired and cleaned up.
-- Whether VM provisioning should become an asynchronous job with progress polling.
-- How scenario and VM-template administration will be exposed safely.
+`user_task_progress.earned_points` is the score source of truth. A task awards its own `tasks.points` the first time it becomes completed. Dashboard, Profile, Login and Admin queries sum progress points. `users.total_score`, scenario `max_score` and `flags.points` remain legacy/metadata fields rather than competing live totals.
+
+## Atomic flag completion
+
+The accepted flag row and completed progress row commit in one transaction. A duplicate flag uses `ON CONFLICT DO NOTHING`, still ensures progress is completed and preserves existing earned points.
+
+## Forward-only schema repair
+
+Previously applied migration files retain their checksums. A new migration version was placed between existing versions so clean databases create `last_activity` before the later policy migration uses it, while established databases can apply the idempotent repair safely.

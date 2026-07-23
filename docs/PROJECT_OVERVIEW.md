@@ -1,46 +1,52 @@
 # Project Overview
 
-Home Lab Manager is a self-hosted cybersecurity learning platform. It combines structured courses with isolated virtual-machine laboratories and Capture The Flag (CTF) exercises.
-
-## Goals
-
-- Teach Linux, networking and cybersecurity through practical exercises.
-- Organize learning content into courses, sections and typed tasks.
-- Provision an isolated VirtualBox machine for a lab scenario.
-- Expose the machine through an SSH-backed browser terminal.
-- Validate flags, award points and record task completion.
-- Keep administrative course management separate from the student experience.
+Home Lab Manager is a self-hosted cybersecurity learning platform. It combines structured courses, persistent learning progress, isolated VirtualBox laboratories, CTF exercises, user profiles and administrative operations.
 
 ## Main domains
 
-### Authentication and users
+### Authentication and profiles
 
-Users can register and log in. Login returns a JWT and user information. Users have a `user` or `admin` role and a cumulative score.
+Users register and log in with email and password. Login returns a 24-hour JWT containing user identity and role. Protected backend middleware re-reads the current role and active state from PostgreSQL, so disabling a user or changing a role takes effect without waiting for the JWT to expire.
 
-### Academy
+Authenticated users can edit their name and email, change their password and store a PNG, JPEG or WebP avatar as a data URL.
 
-The Academy contains published courses. A course contains ordered sections, and a section contains ordered tasks. Tasks are rendered by type:
+### Academy and progress
 
-- `LESSON`: learning content.
-- `PRACTICE`: learning and interaction workspace; still partially implemented.
-- `LAB`: scenario-backed machine, terminal and flag submission.
+Published courses contain ordered sections and tasks:
+
+- `LESSON`: content that the user completes explicitly.
+- `PRACTICE`: a two-panel learning layout whose interaction model is still partial.
+- `LAB`: content connected to a scenario, VM, terminal and flag.
+
+Progress is sequential. Tasks are `NOT_STARTED`, `IN_PROGRESS` or `COMPLETED`; incomplete tasks after the first incomplete task are `LOCKED`. Completed and currently reachable tasks are `AVAILABLE`. Completing a non-Lab content task or solving a Lab flag records the task's points in `user_task_progress.earned_points`.
+
+### Dashboard
+
+The Dashboard is backed by live API data. It shows the user's score, active/completed/task statistics, courses to continue, available courses and completed courses.
 
 ### Lab engine
 
-A lab task may reference a scenario. Starting it creates an environment and instance record, clones a VirtualBox template, starts the VM, waits for SSH and exposes a WebSocket terminal. An active environment can be restored after revisiting the task.
+Starting a Lab creates environment and instance records, clones a configured VirtualBox template, starts it and waits up to 120 seconds for SSH. A user may have only one `Building`, `Running` or `Stopping` environment globally.
 
-### CTF and progress
+Active Labs carry `last_activity` and `expires_at`. The default idle timeout is 20 minutes, configurable with `LAB_IDLE_TIMEOUT_MINUTES`. Terminal input and flag submissions refresh activity. A background worker scans expired environments every minute and deletes up to ten per pass.
 
-Flag submission verifies the user, running environment, task-to-scenario relationship and flag value. A correct flag awards points and marks the associated task as completed. Duplicate flag submissions do not award points twice.
+### Terminal and flags
 
-## Technology summary
+The browser terminal opens an authenticated WebSocket using an environment ID and JWT query parameter. The backend validates the token, active account, environment ownership and running states before bridging to SSH.
 
-- Frontend: React, JavaScript/JSX, Vite, Tailwind CSS and xterm.js.
-- Backend: Rust, Axum and Tokio.
-- Database: PostgreSQL through SQLx.
-- Authentication: JWT and bcrypt.
-- Lab runtime: VirtualBox, SSH and WebSockets.
+Correct flag submission atomically inserts `user_flags` and completes the related task. Duplicate flag solves do not award points twice. Task points, persisted as `earned_points`, are the score source of truth.
+
+### Administration
+
+Admin routes require both a valid JWT and the current `admin` role. The Admin UI provides:
+
+- platform statistics and recent activity;
+- searchable/paginated users, role and status changes, password reset and user details;
+- Academy course, section and task editing;
+- scenario and flag management;
+- Lab operations and forced termination;
+- filtered administrative activity logs.
 
 ## Current maturity
 
-The Academy, authentication and primary Lab flow are implemented. Some UI widgets and the practice experience are placeholders. Lab and Academy admin authorization still require hardening, and the committed database migrations do not yet contain every column used by the current repositories. See [Roadmap](ROADMAP.md) and [Database](DATABASE.md).
+The core authentication, profile, Dashboard, Academy progress, Lab, terminal, flag and Admin flows are implemented. Practice interaction, additional content widgets, leaderboard, asynchronous provisioning, broad automated tests and production operations remain incomplete.

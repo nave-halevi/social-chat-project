@@ -1,16 +1,31 @@
-# React + Vite
+# Home Lab Manager Frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+React 19/Vite frontend for Home Lab Manager. It contains authentication, the live Dashboard, user profiles, Academy course progress, VirtualBox Lab controls, an xterm.js terminal and the Admin panel.
 
-Currently, two official plugins are available:
+## Configuration
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+The frontend uses `VITE_API_URL` for every REST client and derives the WebSocket origin from it. Without configuration it uses `http://localhost:3000`.
 
-## React Compiler
+```dotenv
+VITE_API_URL=http://localhost:3000
+```
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## Commands
 
-## Expanding the ESLint configuration
+```bash
+npm ci
+npm run dev
+npm run lint
+npm run build
+```
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+## Structure
+
+- `src/config`: shared API origin.
+- `src/context`: authentication state.
+- `src/features`: Auth, Dashboard, Profile, Academy, Labs, CTF and Admin.
+- `src/layouts`: public and authenticated application shells.
+- `src/routes`: authentication and Admin route guards.
+- `src/shared`: reusable UI.
+
+Practice interaction, video/download/hint widgets, the Machines prototype and leaderboard are not complete.
