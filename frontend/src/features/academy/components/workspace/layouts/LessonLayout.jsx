@@ -4,6 +4,7 @@ import { completeContentTask } from "../../../services/academyService";
 
 import LearningPanel from "../panels/LearningPanel";
 import MarkdownWidget from "../widgets/MarkdownWidget";
+import VideoWidget from "../widgets/VideoWidget";
 
 export default function LessonLayout({ task, onTaskCompleted }) {
   const [isCompleting, setIsCompleting] = useState(false);
@@ -33,6 +34,7 @@ export default function LessonLayout({ task, onTaskCompleted }) {
       <LearningPanel>
         <div className="flex min-h-full flex-col">
           <MarkdownWidget task={task} />
+          <VideoWidget videoId={task?.youtube_video_id} />
 
           <div className="mt-auto border-t border-zinc-800 pt-6">
             {error && (

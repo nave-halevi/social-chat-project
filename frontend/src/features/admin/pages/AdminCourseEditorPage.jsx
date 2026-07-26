@@ -212,6 +212,7 @@ export default function AdminCourseEditorPage() {
               {taskEdit?.sectionId === section.id && (
                 <div className="mt-4">
                   <TaskForm
+                    key={taskEdit.task?.id || `new-${section.id}`}
                     task={taskEdit.task}
                     scenarios={scenarios}
                     busy={busy}
@@ -247,6 +248,12 @@ export default function AdminCourseEditorPage() {
                         <span className="ml-3 text-xs text-zinc-500">
                           {task.task_type} · {task.points} pts
                         </span>
+                        {task.task_type === "LESSON" &&
+                          task.youtube_video_id && (
+                            <span className="ml-2 rounded-full border border-red-900 bg-red-950/40 px-2 py-0.5 text-xs text-red-300">
+                              Video
+                            </span>
+                          )}
                       </div>
                       <div>
                         <button

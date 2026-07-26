@@ -300,9 +300,12 @@ pub async fn delete_section(pool: &PgPool, id: Uuid) -> Result<(), sqlx::Error> 
 // Tasks
 // =====================================================
 
-pub async fn create_task(pool: &PgPool, req: CreateTaskRequest) -> Result<Task, sqlx::Error> {
-    sqlx::query_as!(
-        Task,
+pub async fn create_task(
+    pool: &PgPool,
+    req: CreateTaskRequest,
+    youtube_video_id: Option<&str>,
+) -> Result<Task, sqlx::Error> {
+    sqlx::query_as::<_, Task>(
         r#"
         INSERT INTO tasks
             (
@@ -311,12 +314,13 @@ pub async fn create_task(pool: &PgPool, req: CreateTaskRequest) -> Result<Task, 
                 title,
                 content,
                 task_type,
+                youtube_video_id,
                 order_index,
                 points
             )
 
         VALUES
-            ($1,$2,$3,$4,$5,$6,COALESCE($7,10))
+            ($1,$2,$3,$4,$5,$6,$7,COALESCE($8,10))
 
 
         RETURNING
@@ -326,24 +330,25 @@ pub async fn create_task(pool: &PgPool, req: CreateTaskRequest) -> Result<Task, 
             title,
             content,
             task_type,
+            youtube_video_id,
             order_index,
             points
         "#,
-        req.section_id,
-        req.scenario_id,
-        req.title,
-        req.content,
-        req.task_type,
-        req.order_index,
-        req.points
     )
+    .bind(req.section_id)
+    .bind(req.scenario_id)
+    .bind(req.title)
+    .bind(req.content)
+    .bind(req.task_type)
+    .bind(youtube_video_id)
+    .bind(req.order_index)
+    .bind(req.points)
     .fetch_one(pool)
     .await
 }
 
 pub async fn get_task_by_id(pool: &PgPool, id: Uuid) -> Result<Option<Task>, sqlx::Error> {
-    sqlx::query_as!(
-        Task,
+    sqlx::query_as::<_, Task>(
         r#"
         SELECT
             id,
@@ -352,6 +357,7 @@ pub async fn get_task_by_id(pool: &PgPool, id: Uuid) -> Result<Option<Task>, sql
             title,
             content,
             task_type,
+            youtube_video_id,
             order_index,
             points
 
@@ -359,8 +365,8 @@ pub async fn get_task_by_id(pool: &PgPool, id: Uuid) -> Result<Option<Task>, sql
 
         WHERE id = $1
         "#,
-        id
     )
+    .bind(id)
     .fetch_optional(pool)
     .await
 }
@@ -369,8 +375,7 @@ pub async fn get_tasks_by_section(
     pool: &PgPool,
     section_id: Uuid,
 ) -> Result<Vec<Task>, sqlx::Error> {
-    sqlx::query_as!(
-        Task,
+    sqlx::query_as::<_, Task>(
         r#"
         SELECT
             id,
@@ -379,6 +384,7 @@ pub async fn get_tasks_by_section(
             title,
             content,
             task_type,
+            youtube_video_id,
             order_index,
             points
 
@@ -388,8 +394,8 @@ pub async fn get_tasks_by_section(
 
         ORDER BY order_index
         "#,
-        section_id
     )
+    .bind(section_id)
     .fetch_all(pool)
     .await
 }
@@ -398,9 +404,10 @@ pub async fn update_task(
     pool: &PgPool,
     id: Uuid,
     req: UpdateTaskRequest,
+    update_youtube_video_id: bool,
+    youtube_video_id: Option<&str>,
 ) -> Result<Task, sqlx::Error> {
-    sqlx::query_as!(
-        Task,
+    sqlx::query_as::<_, Task>(
         r#"
         UPDATE tasks
 
@@ -416,8 +423,12 @@ pub async fn update_task(
 
             order_index = COALESCE($7,order_index),
 
-            points = COALESCE($8,points)
+            points = COALESCE($8,points),
 
+            youtube_video_id = CASE
+                WHEN $9 THEN $10
+                ELSE youtube_video_id
+            END
 
         WHERE id = $1
 
@@ -430,18 +441,21 @@ pub async fn update_task(
             title,
             content,
             task_type,
+            youtube_video_id,
             order_index,
             points
         "#,
-        id,
-        req.title,
-        req.content,
-        req.task_type,
-        req.scenario_id.is_some(),
-        req.scenario_id.flatten(),
-        req.order_index,
-        req.points
     )
+    .bind(id)
+    .bind(req.title)
+    .bind(req.content)
+    .bind(req.task_type)
+    .bind(req.scenario_id.is_some())
+    .bind(req.scenario_id.flatten())
+    .bind(req.order_index)
+    .bind(req.points)
+    .bind(update_youtube_video_id)
+    .bind(youtube_video_id)
     .fetch_one(pool)
     .await
 }

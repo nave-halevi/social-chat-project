@@ -23,6 +23,9 @@
 - Published catalog and full ordered course workspace.
 - Admin CRUD for courses, sections and tasks.
 - `LESSON`, `PRACTICE` and `LAB` rendering.
+- Optional YouTube video on `LESSON` tasks without introducing a `VIDEO` task type.
+- HTTPS-only validation for watch, `youtu.be`, embed and shorts URLs on exact YouTube domains.
+- Privacy-enhanced responsive playback through `youtube-nocookie.com`.
 - Persistent `NOT_STARTED`, `IN_PROGRESS` and `COMPLETED` progress.
 - Sequential `AVAILABLE`/`LOCKED` access.
 - Progress percentage and earned/total points.
@@ -62,7 +65,9 @@
 ## Partial or prototype
 
 - Practice layout exists without a complete interaction model.
-- Video, download and hint widgets are placeholders.
+- Download and hint widgets are placeholders.
+- Lesson completion remains manual; video playback and watch duration are not tracked.
+- Structured `content_blocks` and full Markdown rendering remain future content-model options.
 - Machines uses hard-coded scenarios and is separate from Academy.
 - Leaderboard is a placeholder.
 - Provisioning is synchronous with a general loading state.
@@ -71,8 +76,7 @@
 
 ## Missing
 
-- Video/YouTube lesson support.
-- Complete Practice, video, download and hint experiences.
+- Complete Practice, download and hint experiences.
 - Real leaderboard.
 - Certificates and achievements.
 - Background provisioning jobs, progress polling, retry and cancellation.

@@ -10,6 +10,7 @@ pub struct Task {
     pub title: String,
     pub content: String,
     pub task_type: String,
+    pub youtube_video_id: Option<String>,
     pub order_index: i32,
     pub points: i32,
 }
