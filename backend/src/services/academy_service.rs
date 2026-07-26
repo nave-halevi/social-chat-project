@@ -10,8 +10,9 @@ use crate::models::entities::{course::Course, section::Section, task::Task};
 use crate::models::dto::{
     course::{CourseFullDto, CreateCourseRequest, UpdateCourseRequest},
     section::{CreateSectionRequest, SectionDto, UpdateSectionRequest},
-    task::{CreateTaskRequest, TaskDto, UpdateTaskRequest},
+    task::{CreateTaskRequest, TaskDto, UpdateTaskRequest, VideoUrlPatch},
 };
+use crate::utils::youtube::parse_youtube_video_id;
 
 // =====================================================
 // Courses
@@ -75,6 +76,7 @@ pub async fn get_course_full(pool: &PgPool, course_id: Uuid) -> Result<CourseFul
                 title: task.title,
                 content: task.content,
                 task_type: task.task_type,
+                youtube_video_id: task.youtube_video_id,
                 order_index: task.order_index,
                 points: task.points,
             })
@@ -231,6 +233,36 @@ pub async fn delete_section(pool: &PgPool, id: Uuid) -> Result<(), AppError> {
 // Tasks
 // =====================================================
 
+const TASK_TYPES: [&str; 3] = ["LESSON", "PRACTICE", "LAB"];
+
+fn normalize_task_type(task_type: &str) -> Result<String, AppError> {
+    let normalized = task_type.trim().to_ascii_uppercase();
+
+    if TASK_TYPES.contains(&normalized.as_str()) {
+        Ok(normalized)
+    } else {
+        Err(AppError::Validation(
+            "Task type must be LESSON, PRACTICE, or LAB.".to_string(),
+        ))
+    }
+}
+
+fn video_id_from_url(video_url: &str, task_type: &str) -> Result<Option<String>, AppError> {
+    let video_url = video_url.trim();
+    if video_url.is_empty() {
+        return Ok(None);
+    }
+    if task_type != "LESSON" {
+        return Err(AppError::Validation(
+            "Only LESSON tasks can include a YouTube video.".to_string(),
+        ));
+    }
+
+    parse_youtube_video_id(video_url)
+        .map(Some)
+        .map_err(|error| AppError::Validation(error.to_string()))
+}
+
 pub async fn get_task_by_id(pool: &PgPool, id: Uuid) -> Result<Task, AppError> {
     academy_repo::get_task_by_id(pool, id)
         .await?
@@ -241,7 +273,7 @@ pub async fn get_tasks_by_section(pool: &PgPool, section_id: Uuid) -> Result<Vec
     Ok(academy_repo::get_tasks_by_section(pool, section_id).await?)
 }
 
-pub async fn create_task(pool: &PgPool, req: CreateTaskRequest) -> Result<Task, AppError> {
+pub async fn create_task(pool: &PgPool, mut req: CreateTaskRequest) -> Result<Task, AppError> {
     if req.title.trim().is_empty()
         || req.content.trim().is_empty()
         || req.order_index < 0
@@ -251,6 +283,12 @@ pub async fn create_task(pool: &PgPool, req: CreateTaskRequest) -> Result<Task, 
             "Task title and content are required; order and points cannot be negative.".to_string(),
         ));
     }
+    req.task_type = normalize_task_type(&req.task_type)?;
+    let youtube_video_id = match req.video_url.as_deref() {
+        Some(video_url) => video_id_from_url(video_url, &req.task_type)?,
+        None => None,
+    };
+
     if req.task_type == "LAB" {
         let scenario_id = req.scenario_id.ok_or_else(|| {
             AppError::Validation("LAB tasks must reference a scenario.".to_string())
@@ -266,7 +304,7 @@ pub async fn create_task(pool: &PgPool, req: CreateTaskRequest) -> Result<Task, 
         }
     }
 
-    academy_repo::create_task(pool, req)
+    academy_repo::create_task(pool, req, youtube_video_id.as_deref())
         .await
         .map_err(|error| map_order_write_error(error, "task"))
 }
@@ -292,8 +330,16 @@ pub async fn update_task(
                 .to_string(),
         ));
     }
+    if let Some(task_type) = &req.task_type {
+        req.task_type = Some(normalize_task_type(task_type)?);
+    }
+
     let current = get_task_by_id(pool, id).await?;
-    let task_type = req.task_type.as_deref().unwrap_or(&current.task_type);
+    let task_type = req
+        .task_type
+        .as_deref()
+        .unwrap_or(&current.task_type)
+        .to_string();
     let scenario_id = req.scenario_id.unwrap_or(current.scenario_id);
 
     if task_type != "LAB" {
@@ -323,13 +369,59 @@ pub async fn update_task(
         }
     }
 
-    academy_repo::update_task(pool, id, req)
-        .await
-        .map_err(|error| map_order_write_error(error, "task"))
+    let (update_youtube_video_id, youtube_video_id) = match &req.video_url {
+        VideoUrlPatch::Missing if task_type == "LESSON" => (false, None),
+        VideoUrlPatch::Missing | VideoUrlPatch::Null => (true, None),
+        VideoUrlPatch::Value(video_url) => (true, video_id_from_url(video_url, &task_type)?),
+    };
+
+    academy_repo::update_task(
+        pool,
+        id,
+        req,
+        update_youtube_video_id,
+        youtube_video_id.as_deref(),
+    )
+    .await
+    .map_err(|error| map_order_write_error(error, "task"))
 }
 
 pub async fn delete_task(pool: &PgPool, id: Uuid) -> Result<(), AppError> {
     academy_repo::delete_task(pool, id).await?;
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{normalize_task_type, video_id_from_url};
+    use crate::errors::AppError;
+
+    #[test]
+    fn normalizes_allowed_task_types() {
+        assert_eq!(normalize_task_type(" lesson ").unwrap(), "LESSON");
+        assert_eq!(normalize_task_type("Practice").unwrap(), "PRACTICE");
+        assert_eq!(normalize_task_type("LAB").unwrap(), "LAB");
+    }
+
+    #[test]
+    fn rejects_unknown_task_types() {
+        assert!(matches!(
+            normalize_task_type("THEORY"),
+            Err(AppError::Validation(_))
+        ));
+    }
+
+    #[test]
+    fn rejects_a_video_for_non_lesson_tasks() {
+        assert!(matches!(
+            video_id_from_url("https://youtu.be/dQw4w9WgXcQ", "PRACTICE"),
+            Err(AppError::Validation(_))
+        ));
+    }
+
+    #[test]
+    fn treats_an_empty_video_url_as_no_video() {
+        assert_eq!(video_id_from_url("  ", "LESSON").unwrap(), None);
+    }
 }
