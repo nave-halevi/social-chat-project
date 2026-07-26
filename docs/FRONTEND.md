@@ -71,7 +71,9 @@ The course workspace combines the course hierarchy with `/api/task-progress` dat
 - prevents selection of `LOCKED` tasks;
 - advances to the next available task after completion.
 
-`LESSON` tasks have an explicit completion action. `LAB` tasks require flag submission. `PRACTICE` has a layout but its interaction is incomplete.
+`LESSON` tasks have an explicit completion action and may include an optional YouTube video between their text and completion button. `VideoWidget` accepts only an 11-character video ID and creates a responsive iframe using `https://www.youtube-nocookie.com/embed/<id>`. It never accepts a full URL or server-provided HTML. Lessons without video render as before.
+
+Completing a video lesson remains an explicit user action. The frontend does not track playback state or require that the video be watched. `LAB` tasks require flag submission. `PRACTICE` has a layout but its interaction is incomplete.
 
 ## Lab and terminal
 
@@ -89,12 +91,15 @@ It forwards xterm input/output and cleans up listeners, socket and terminal on u
 
 The Admin UI contains overview statistics, Academy content editing, scenarios, searchable/paginated users, user details and operations, Labs and termination, flags and activity logs. Client-side Admin routing supplements the backend's JWT/Admin middleware.
 
+The task editor shows a YouTube URL field only for `LESSON`. It accepts HTTPS watch, `youtu.be`, embed and shorts URLs on exact supported YouTube domains. Existing IDs are displayed as watch URLs. Clearing the field or changing the task to `PRACTICE` or `LAB` sends `video_url: null`; client validation improves feedback while the backend remains authoritative.
+
 ## Legacy and incomplete UI
 
 - `LabsPage`, `LabWorkspace`, `LabList` and `CreateLabButton` are not part of the main routed Academy flow.
 - `/machines` uses hard-coded scenario UUIDs.
 - `/leaderboard` is a placeholder.
-- `VideoWidget`, `DownloadWidget` and `HintWidget` return no functional experience.
+- `DownloadWidget` and `HintWidget` return no functional experience.
 - Practice does not connect to a complete active interaction environment.
+- Academy content is still stored as one plain-text field. Structured `content_blocks` and full Markdown rendering remain possible future enhancements.
 - Lab state is not centralized in one application-wide context.
 - Development console logging remains in some components.

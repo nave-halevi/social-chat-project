@@ -11,6 +11,7 @@ Home Lab Manager is a self-hosted cybersecurity learning platform inspired by ha
 - User profiles, password changes and PNG/JPEG/WebP avatars.
 - Real dashboard data for available, active and completed courses.
 - Ordered courses, sections and `LESSON`, `PRACTICE` and `LAB` tasks.
+- Optional privacy-enhanced YouTube video for `LESSON` tasks.
 - Persistent task progress, sequential locking and points.
 - Scenario-backed VirtualBox provisioning and active Lab restoration.
 - One active Lab per user, idle expiration and periodic cleanup.
@@ -18,7 +19,7 @@ Home Lab Manager is a self-hosted cybersecurity learning platform inspired by ha
 - Atomic flag recording and Lab-task completion.
 - Admin dashboard, users, Academy content, scenarios, flags, Labs and activity logs.
 
-Partial experiences include Practice interaction, video/download/hint widgets, the standalone Machines prototype and the leaderboard. See [Feature Status](docs/FEATURES.md) and [Roadmap](docs/ROADMAP.md).
+Partial experiences include Practice interaction, download/hint widgets, the standalone Machines prototype and the leaderboard. See [Feature Status](docs/FEATURES.md) and [Roadmap](docs/ROADMAP.md).
 
 ## Architecture
 
@@ -175,7 +176,8 @@ home-lab-manager/
 
 - VM provisioning remains a synchronous request and can wait up to 120 seconds for SSH.
 - Practice tasks do not have a complete interaction model.
-- Video, download and hint widgets are placeholders.
+- Download and hint widgets are placeholders.
+- Video playback is optional and does not track watch completion or duration.
 - The standalone Machines page uses hard-coded scenario UUIDs.
 - The leaderboard is a placeholder.
 - Lab state is coordinated through page hooks and Navbar polling rather than one application-wide state container.

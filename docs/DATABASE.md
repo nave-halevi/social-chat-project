@@ -25,9 +25,11 @@ Displayed score is not read from `users.total_score`; current queries sum `user_
 
 ### `courses`, `sections`, `tasks`
 
-Courses have title, unique slug, description, difficulty, publication state and creation time. Sections belong to courses and have a unique `order_index` within each course. Tasks belong to sections, optionally reference a scenario, and store content, type, order and points. Task order is unique within a section.
+Courses have title, unique slug, description, difficulty, publication state and creation time. Sections belong to courses and have a unique `order_index` within each course. Tasks belong to sections, optionally reference a scenario, and store content, type, order, points and an optional `youtube_video_id`. Task order is unique within a section.
 
-Current task types are `LESSON`, `PRACTICE` and `LAB`.
+Current task types are `LESSON`, `PRACTICE` and `LAB`; video is optional metadata on `LESSON`, not a separate `VIDEO` task type. `youtube_video_id` is nullable `VARCHAR(11)`. The database stores only the validated ID, never a full URL or iframe HTML.
+
+Constraints restrict video IDs to `^[A-Za-z0-9_-]{11}$`, permit a non-null ID only when `task_type = 'LESSON'`, and enforce the task-type allowlist. Changing a lesson to another type therefore requires clearing its video.
 
 ### `user_task_progress`
 
@@ -78,11 +80,15 @@ The later score/Lab-policy migration adds:
 - the global one-active-Lab partial unique index;
 - the active-expiration index.
 
+`20260726000000_add_lesson_video.sql` normalizes legacy `theory` values to `LESSON`, normalizes casing for the supported task types, adds `tasks.youtube_video_id`, and adds the video-format, lesson-only and task-type constraints. It does not delete tasks.
+
 ## Important constraints and indexes
 
 - unique user email and course slug;
 - unique section order per course;
 - unique task order per section;
+- task type restricted to `LESSON`, `PRACTICE` or `LAB`;
+- valid 11-character YouTube IDs on `LESSON` tasks only;
 - unique progress per user/task;
 - unique solved flag per user/flag;
 - one active environment per user;

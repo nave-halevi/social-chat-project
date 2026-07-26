@@ -38,6 +38,16 @@ VM provisioning remains inside the create request and waits up to 120 seconds fo
 
 `user_task_progress.earned_points` is the score source of truth. A task awards its own `tasks.points` the first time it becomes completed. Dashboard, Profile, Login and Admin queries sum progress points. `users.total_score`, scenario `max_score` and `flags.points` remain legacy/metadata fields rather than competing live totals.
 
+## Lesson video representation
+
+YouTube video is optional metadata on `LESSON`; it does not introduce a `VIDEO` task type. Admin requests provide `video_url`, but the service accepts only HTTPS watch, `youtu.be`, embed and shorts URLs on exact supported YouTube domains. It extracts and stores only the validated 11-character ID in `tasks.youtube_video_id`.
+
+Task responses expose the ID rather than a URL or iframe HTML. The frontend owns presentation and constructs only `https://www.youtube-nocookie.com/embed/<id>`. This keeps untrusted embed markup out of the database and API and provides a stable privacy-enhanced playback boundary.
+
+Omitting `video_url` during update preserves the current ID; `null` or an empty string clears it. Moving a lesson to another task type also clears the ID. Lesson completion remains manual and independent of playback because the application does not track whether or how long a learner watched the video.
+
+The current task content remains one plain-text field. Structured `content_blocks` and full Markdown rendering are separate future content-model decisions rather than requirements of video support.
+
 ## Atomic flag completion
 
 The accepted flag row and completed progress row commit in one transaction. A duplicate flag uses `ON CONFLICT DO NOTHING`, still ensures progress is completed and preserves existing earned points.

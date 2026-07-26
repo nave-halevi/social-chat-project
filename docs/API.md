@@ -108,6 +108,7 @@ The list returns published courses. The full endpoint returns:
           "title": "Welcome",
           "content": "...",
           "task_type": "LESSON",
+          "youtube_video_id": "dQw4w9WgXcQ",
           "order_index": 1,
           "points": 10
         }
@@ -197,12 +198,23 @@ Create:
   "title": "Read the guide",
   "content": "...",
   "task_type": "LESSON",
+  "video_url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
   "order_index": 1,
   "points": 10
 }
 ```
 
-Update fields are optional: `title`, `content`, `task_type`, `scenario_id`, `order_index`, `points`. Send `"scenario_id": null` to clear the relationship. Supported types are `LESSON`, `PRACTICE` and `LAB`; Lab tasks require an active scenario.
+`video_url` is optional and is accepted only for a `LESSON`. Supported URLs use HTTPS and an exact `youtube.com`, `www.youtube.com`, `m.youtube.com` or `youtu.be` domain in watch, short-link, embed or shorts form. The server validates the URL without contacting YouTube and stores only its 11-character video ID.
+
+Task responses return `youtube_video_id`, which is either the validated ID or `null`; they never return stored iframe HTML or a stored YouTube URL. Video remains optional, and there is no separate `VIDEO` task type.
+
+Update fields are optional: `title`, `content`, `task_type`, `scenario_id`, `order_index`, `points`, `video_url`. Send `"scenario_id": null` to clear the relationship. For `video_url`:
+
+- omit the field to preserve the current video;
+- send `null` or an empty string to clear it;
+- send a supported URL to validate and replace it.
+
+Changing a `LESSON` to `PRACTICE` or `LAB` clears its video. Supported task types are `LESSON`, `PRACTICE` and `LAB`; Lab tasks require an active scenario.
 
 ## Task progress
 
@@ -247,6 +259,8 @@ Start and complete have no request body. All three return the current course pro
 Progress statuses are `NOT_STARTED`, `IN_PROGRESS` and `COMPLETED`. Access statuses are only `AVAILABLE` and `LOCKED`; completion is represented by `progress_status: COMPLETED`, not a third access-status value.
 
 Only the first incomplete task is available. Lab tasks cannot use `/complete`; they complete through correct flag submission.
+
+A lesson with a video still completes through the explicit `/complete` action. Playback and watch duration are not tracked.
 
 ## Dashboard
 
