@@ -20,6 +20,7 @@ pub struct ProfileResponseDto {
 pub struct UpdateProfileRequest {
     pub user_name: String,
     pub email: String,
+    pub avatar_url: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]

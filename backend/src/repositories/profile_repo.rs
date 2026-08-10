@@ -75,12 +75,14 @@ pub async fn update_profile(
     user_id: Uuid,
     user_name: &str,
     email: &str,
+    avatar_url: Option<&str>,
 ) -> Result<Option<ProfileRow>, sqlx::Error> {
     sqlx::query_as::<_, ProfileRow>(
         r#"
         UPDATE users
         SET user_name = $2,
             email = $3,
+            avatar_url = COALESCE($4, avatar_url),
             updated_at = NOW()
         WHERE id = $1
         RETURNING
@@ -101,6 +103,7 @@ pub async fn update_profile(
     .bind(user_id)
     .bind(user_name)
     .bind(email)
+    .bind(avatar_url)
     .fetch_optional(pool)
     .await
 }

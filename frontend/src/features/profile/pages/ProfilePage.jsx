@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { useAuth } from "../../../context/auth-context";
@@ -14,6 +15,7 @@ function formatDate(value) {
 export default function ProfilePage() {
   const navigate = useNavigate();
   const { logout } = useAuth();
+  const [draftAvatarUrl, setDraftAvatarUrl] = useState(null);
   const {
     profile,
     loading,
@@ -34,6 +36,19 @@ export default function ProfilePage() {
   const handleLogout = () => {
     logout();
     navigate("/login", { replace: true });
+  };
+
+  const handleProfileSubmit = async (payload) => {
+    const updatedProfile = await updateProfileDetails(payload);
+
+    if (updatedProfile) {
+      setDraftAvatarUrl(null);
+    }
+  };
+
+  const handleAvatarChange = (avatarUrl) => {
+    setDraftAvatarUrl(null);
+    return updateProfileAvatar(avatarUrl);
   };
 
   if (loading) {
@@ -79,8 +94,11 @@ export default function ProfilePage() {
 
         <ProfileSummaryCard
           profile={profile}
+          avatarUrl={draftAvatarUrl ?? profile.avatar_url}
           isUpdatingAvatar={isUpdatingAvatar}
-          onAvatarChange={updateProfileAvatar}
+          onAvatarChange={handleAvatarChange}
+          onGeneratedAvatar={setDraftAvatarUrl}
+          onClearMessages={clearMessages}
         />
 
         {errorContext === "avatar" && error && (
@@ -99,6 +117,8 @@ export default function ProfilePage() {
           <ProfileDetailsForm
             key={profile.updated_at}
             profile={profile}
+            avatarUrl={draftAvatarUrl ?? profile.avatar_url}
+            hasAvatarChanges={draftAvatarUrl !== null}
             isUpdating={isUpdatingProfile}
             error={errorContext === "profile" ? error : null}
             success={
@@ -106,7 +126,7 @@ export default function ProfilePage() {
                 ? profileSuccess
                 : null
             }
-            onSubmit={updateProfileDetails}
+            onSubmit={handleProfileSubmit}
             onClearMessages={clearMessages}
           />
 
