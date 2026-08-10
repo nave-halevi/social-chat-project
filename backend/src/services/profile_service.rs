@@ -1,5 +1,6 @@
 use bcrypt::{DEFAULT_COST, hash, verify};
 use sqlx::PgPool;
+use url::Url;
 use uuid::Uuid;
 
 use crate::{
@@ -18,6 +19,8 @@ const MIN_USERNAME_LENGTH: usize = 3;
 const MAX_USERNAME_LENGTH: usize = 50;
 const MIN_PASSWORD_LENGTH: usize = 8;
 const MAX_AVATAR_LENGTH: usize = 2_800_000;
+const DICEBEAR_AVATAR_HOST: &str = "api.dicebear.com";
+const DICEBEAR_AVATAR_PATH: &str = "/10.x/pixel-art/svg";
 
 fn map_profile(profile: ProfileRow) -> ProfileResponseDto {
     let role = match profile.role.to_ascii_lowercase().as_str() {
@@ -62,6 +65,48 @@ fn is_unique_violation(error: &sqlx::Error) -> bool {
     )
 }
 
+fn is_dicebear_avatar_url(value: &str) -> bool {
+    let Ok(url) = Url::parse(value) else {
+        return false;
+    };
+    let mut query_pairs = url.query_pairs();
+    let has_valid_seed = matches!(
+        (query_pairs.next(), query_pairs.next()),
+        (Some((key, seed)), None) if key == "seed" && !seed.is_empty()
+    );
+
+    url.scheme() == "https"
+        && url.host_str() == Some(DICEBEAR_AVATAR_HOST)
+        && url.port().is_none()
+        && url.path() == DICEBEAR_AVATAR_PATH
+        && url.fragment().is_none()
+        && has_valid_seed
+}
+
+fn validate_avatar(avatar_url: Option<&str>) -> Result<(), AppError> {
+    let Some(avatar) = avatar_url else {
+        return Ok(());
+    };
+    let allowed_type = avatar.starts_with("data:image/png;base64,")
+        || avatar.starts_with("data:image/jpeg;base64,")
+        || avatar.starts_with("data:image/webp;base64,")
+        || is_dicebear_avatar_url(avatar);
+
+    if !allowed_type {
+        return Err(AppError::Validation(
+            "Profile image must be a PNG, JPEG, WebP, or DiceBear image.".to_string(),
+        ));
+    }
+
+    if avatar.len() > MAX_AVATAR_LENGTH {
+        return Err(AppError::Validation(
+            "Profile image must be smaller than 2 MB.".to_string(),
+        ));
+    }
+
+    Ok(())
+}
+
 pub async fn get_profile(pool: &PgPool, user_id: Uuid) -> Result<ProfileResponseDto, AppError> {
     let profile = profile_repo::get_profile_by_user_id(pool, user_id)
         .await?
@@ -77,6 +122,7 @@ pub async fn update_profile(
 ) -> Result<ProfileResponseDto, AppError> {
     let user_name = request.user_name.trim();
     let email = request.email.trim().to_ascii_lowercase();
+    let avatar_url = request.avatar_url.as_deref().map(str::trim);
     let username_length = user_name.chars().count();
 
     if !(MIN_USERNAME_LENGTH..=MAX_USERNAME_LENGTH).contains(&username_length) {
@@ -97,16 +143,19 @@ pub async fn update_profile(
         ));
     }
 
-    let profile = match profile_repo::update_profile(pool, user_id, user_name, &email).await {
-        Ok(Some(profile)) => profile,
-        Ok(None) => return Err(AppError::NotFound),
-        Err(error) if is_unique_violation(&error) => {
-            return Err(AppError::Validation(
-                "This email address is already in use.".to_string(),
-            ));
-        }
-        Err(error) => return Err(AppError::Database(error)),
-    };
+    validate_avatar(avatar_url)?;
+
+    let profile =
+        match profile_repo::update_profile(pool, user_id, user_name, &email, avatar_url).await {
+            Ok(Some(profile)) => profile,
+            Ok(None) => return Err(AppError::NotFound),
+            Err(error) if is_unique_violation(&error) => {
+                return Err(AppError::Validation(
+                    "This email address is already in use.".to_string(),
+                ));
+            }
+            Err(error) => return Err(AppError::Database(error)),
+        };
 
     Ok(map_profile(profile))
 }
@@ -166,28 +215,37 @@ pub async fn update_avatar(
     request: UpdateAvatarRequest,
 ) -> Result<ProfileResponseDto, AppError> {
     let avatar_url = request.avatar_url.as_deref().map(str::trim);
-
-    if let Some(avatar) = avatar_url {
-        let allowed_type = avatar.starts_with("data:image/png;base64,")
-            || avatar.starts_with("data:image/jpeg;base64,")
-            || avatar.starts_with("data:image/webp;base64,");
-
-        if !allowed_type {
-            return Err(AppError::Validation(
-                "Profile image must be a PNG, JPEG, or WebP image.".to_string(),
-            ));
-        }
-
-        if avatar.len() > MAX_AVATAR_LENGTH {
-            return Err(AppError::Validation(
-                "Profile image must be smaller than 2 MB.".to_string(),
-            ));
-        }
-    }
+    validate_avatar(avatar_url)?;
 
     let profile = profile_repo::update_avatar(pool, user_id, avatar_url)
         .await?
         .ok_or(AppError::NotFound)?;
 
     Ok(map_profile(profile))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::is_dicebear_avatar_url;
+
+    #[test]
+    fn accepts_the_expected_dicebear_avatar_url() {
+        assert!(is_dicebear_avatar_url(
+            "https://api.dicebear.com/10.x/pixel-art/svg?seed=fixed%20seed"
+        ));
+    }
+
+    #[test]
+    fn rejects_dicebear_avatar_url_variations() {
+        for value in [
+            "http://api.dicebear.com/10.x/pixel-art/svg?seed=fixed",
+            "https://example.com/10.x/pixel-art/svg?seed=fixed",
+            "https://api.dicebear.com/9.x/pixel-art/svg?seed=fixed",
+            "https://api.dicebear.com/10.x/pixel-art/svg",
+            "https://api.dicebear.com/10.x/pixel-art/svg?seed=",
+            "https://api.dicebear.com/10.x/pixel-art/svg?seed=fixed&background=red",
+        ] {
+            assert!(!is_dicebear_avatar_url(value), "accepted {value}");
+        }
+    }
 }

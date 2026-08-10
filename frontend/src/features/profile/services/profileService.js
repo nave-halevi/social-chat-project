@@ -38,11 +38,11 @@ export async function getProfile() {
   return parseResponse(response);
 }
 
-export async function updateProfile({ user_name, email }) {
+export async function updateProfile({ user_name, email, avatar_url }) {
   const response = await fetch(BASE_URL, {
     method: "PUT",
     headers: getAuthHeaders(),
-    body: JSON.stringify({ user_name, email }),
+    body: JSON.stringify({ user_name, email, avatar_url }),
   });
 
   return parseResponse(response);

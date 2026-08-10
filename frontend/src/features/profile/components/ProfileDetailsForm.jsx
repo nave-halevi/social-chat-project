@@ -4,6 +4,8 @@ import Input from "../../../shared/ui/Input";
 
 export default function ProfileDetailsForm({
   profile,
+  avatarUrl,
+  hasAvatarChanges,
   isUpdating,
   error,
   success,
@@ -15,16 +17,23 @@ export default function ProfileDetailsForm({
 
   const hasChanges = useMemo(
     () =>
+      hasAvatarChanges ||
       userName.trim() !== profile.user_name ||
       email.trim().toLowerCase() !== profile.email,
-    [email, profile.email, profile.user_name, userName],
+    [email, hasAvatarChanges, profile.email, profile.user_name, userName],
   );
 
   const handleSubmit = async (event) => {
     event.preventDefault();
     if (!hasChanges) return;
 
-    await onSubmit({ user_name: userName, email });
+    const payload = { user_name: userName, email };
+
+    if (hasAvatarChanges) {
+      payload.avatar_url = avatarUrl;
+    }
+
+    await onSubmit(payload);
   };
 
   return (

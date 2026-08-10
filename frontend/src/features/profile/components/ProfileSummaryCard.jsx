@@ -2,6 +2,12 @@ import { useRef, useState } from "react";
 
 const MAX_IMAGE_SIZE = 2 * 1024 * 1024;
 const ALLOWED_IMAGE_TYPES = ["image/png", "image/jpeg", "image/webp"];
+const DICEBEAR_AVATAR_BASE_URL =
+  "https://api.dicebear.com/10.x/pixel-art/svg";
+
+function buildDiceBearAvatarUrl(seed) {
+  return `${DICEBEAR_AVATAR_BASE_URL}?seed=${encodeURIComponent(seed)}`;
+}
 
 function formatDate(value) {
   if (!value) return "Unknown";
@@ -15,11 +21,16 @@ function formatDate(value) {
 
 export default function ProfileSummaryCard({
   profile,
+  avatarUrl,
   isUpdatingAvatar,
   onAvatarChange,
+  onGeneratedAvatar,
+  onClearMessages,
 }) {
   const fileInputRef = useRef(null);
+  const isGeneratingRef = useRef(false);
   const [imageError, setImageError] = useState(null);
+  const [isGeneratingAvatar, setIsGeneratingAvatar] = useState(false);
   const initial = (profile.user_name || profile.email || "U")
     .charAt(0)
     .toUpperCase();
@@ -48,13 +59,39 @@ export default function ProfileSummaryCard({
     reader.readAsDataURL(file);
   };
 
+  const handleGenerateAvatar = () => {
+    if (isGeneratingRef.current) return;
+
+    isGeneratingRef.current = true;
+    setIsGeneratingAvatar(true);
+
+    const generatedAvatarUrl = buildDiceBearAvatarUrl(crypto.randomUUID());
+    const image = new Image();
+
+    image.onload = () => {
+      onGeneratedAvatar(generatedAvatarUrl);
+      onClearMessages();
+      setImageError(null);
+      setIsGeneratingAvatar(false);
+      isGeneratingRef.current = false;
+    };
+    image.onerror = () => {
+      setImageError("The random avatar could not be loaded. Please try again.");
+      setIsGeneratingAvatar(false);
+      isGeneratingRef.current = false;
+    };
+    image.src = generatedAvatarUrl;
+  };
+
+  const avatarControlsDisabled = isUpdatingAvatar || isGeneratingAvatar;
+
   return (
     <section className="rounded-2xl border border-zinc-800 bg-zinc-900 p-6">
       <div className="flex flex-col gap-6 sm:flex-row sm:items-center">
         <div className="relative h-28 w-28 shrink-0 overflow-hidden rounded-full border-2 border-zinc-700 bg-zinc-950">
-          {profile.avatar_url ? (
+          {avatarUrl ? (
             <img
-              src={profile.avatar_url}
+              src={avatarUrl}
               alt={`${profile.user_name}'s profile`}
               className="h-full w-full object-cover"
             />
@@ -91,17 +128,28 @@ export default function ProfileSummaryCard({
 
             <button
               type="button"
-              disabled={isUpdatingAvatar}
+              disabled={avatarControlsDisabled}
               onClick={() => fileInputRef.current?.click()}
               className="rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-red-500 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {isUpdatingAvatar ? "Uploading..." : "Change Image"}
             </button>
 
-            {profile.avatar_url && (
+            <button
+              type="button"
+              disabled={avatarControlsDisabled}
+              onClick={handleGenerateAvatar}
+              className="rounded-lg border border-zinc-700 px-4 py-2 text-sm font-semibold text-zinc-200 transition hover:border-zinc-600 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {isGeneratingAvatar
+                ? "Generating..."
+                : "Generate Random Avatar"}
+            </button>
+
+            {avatarUrl && (
               <button
                 type="button"
-                disabled={isUpdatingAvatar}
+                disabled={avatarControlsDisabled}
                 onClick={() => onAvatarChange(null)}
                 className="rounded-lg border border-zinc-700 px-4 py-2 text-sm text-zinc-300 transition hover:border-zinc-600 hover:text-white disabled:opacity-50"
               >
